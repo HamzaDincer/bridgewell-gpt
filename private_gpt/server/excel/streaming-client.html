@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Insurance Data Extraction - Streaming Client</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        line-height: 1.6;
+        color: #333;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      h1,
+      h2,
+      h3 {
+        color: #2c3e50;
+      }
+      .container {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .form-group {
+        margin-bottom: 15px;
+      }
+      .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      input[type="text"] {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 16px;
+      }
+      button {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      button:hover {
+        background-color: #2980b9;
+      }
+      button:disabled {
+        background-color: #95a5a6;
+        cursor: not-allowed;
+      }
+      .progress-container {
+        margin-top: 20px;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: #f9f9f9;
+      }
+      .progress-bar {
+        height: 20px;
+        background-color: #2ecc71;
+        width: 0%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+      }
+      .results {
+        margin-top: 20px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+      }
+      .section {
+        background-color: #f8f9fa;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 15px;
+      }
+      .field {
+        margin-bottom: 10px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+      }
+      .field-name {
+        font-weight: bold;
+      }
+      .field-value {
+        margin-top: 5px;
+        word-wrap: break-word;
+      }
+      .log {
+        margin-top: 20px;
+        background-color: #f8f9fa;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 15px;
+        max-height: 200px;
+        overflow-y: auto;
+        font-family: monospace;
+      }
+      .log p {
+        margin: 5px 0;
+      }
+      .current-extraction {
+        font-weight: bold;
+        color: #3498db;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Insurance Data Extraction - Streaming Client</h1>
+
+    <div class="container">
+      <div class="form-group">
+        <label for="filename">Document Filename:</label>
+        <select id="filename" class="form-control">
+          <option value="Canada Life Booklet - Northern Labs.pdf">
+            Canada Life Booklet - Northern Labs.pdf
+          </option>
+          <option value="RBC Booklet - Northern Labs.pdf">
+            RBC Booklet - Northern Labs.pdf
+          </option>
+        </select>
+      </div>
+
+      <div>
+        <button id="startBtn">Start Field-by-Field Extraction</button>
+        <button id="cancelBtn" disabled>Cancel</button>
+      </div>
+
+      <div class="progress-container">
+        <h3>Progress: <span id="progressPercentage">0%</span></h3>
+        <div class="progress-bar" id="progressBar"></div>
+        <p id="currentField" class="current-extraction">Not started</p>
+      </div>
+
+      <div class="results" id="results">
+        <!-- Results will be displayed here -->
+      </div>
+
+      <div class="log" id="log">
+        <h3>Event Log</h3>
+        <!-- Log entries will be displayed here -->
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const startBtn = document.getElementById("startBtn");
+        const cancelBtn = document.getElementById("cancelBtn");
+        const filenameInput = document.getElementById("filename");
+        const progressBar = document.getElementById("progressBar");
+        const progressPercentage =
+          document.getElementById("progressPercentage");
+        const currentField = document.getElementById("currentField");
+        const resultsContainer = document.getElementById("results");
+        const logContainer = document.getElementById("log");
+
+        let eventSource = null;
+
+        // Set up the results structure
+        const setupResultsContainer = () => {
+          resultsContainer.innerHTML = `
+                    <div class="section" id="lifeSection">
+                        <h3>LIFE INSURANCE & AD&D</h3>
+                        <div class="field">
+                            <div class="field-name">Schedule</div>
+                            <div class="field-value" id="life-Schedule">Pending...</div>
+                        </div>
+                        <div class="field">
+                            <div class="field-name">Reduction</div>
+                            <div class="field-value" id="life-Reduction">Pending...</div>
+                        </div>
+                        <div class="field">
+                            <div class="field-name">Non-Evidence Maximum</div>
+                            <div class="field-value" id="life-Non-Evidence-Maximum">Pending...</div>
+                        </div>
+                        <div class="field">
+                            <div class="field-name">Termination Age</div>
+                            <div class="field-value" id="life-Termination-Age">Pending...</div>
+                        </div>
+                    </div>
+                    
+                    <div class="section" id="dependentSection">
+                        <h3>DEPENDENT LIFE</h3>
+                        <div class="field">
+                            <div class="field-name">Spouse</div>
+                            <div class="field-value" id="dependent-Spouse">Pending...</div>
+                        </div>
+                        <div class="field">
+                            <div class="field-name">Child</div>
+                            <div class="field-value" id="dependent-Child">Pending...</div>
+                        </div>
+                        <div class="field">
+                            <div class="field-name">Termination Age</div>
+                            <div class="field-value" id="dependent-Termination-Age">Pending...</div>
+                        </div>
+                    </div>
+                    
+                    <div class="section" id="ltdSection">
+                        <h3>LONG TERM DISABILITY</h3>
+                        <div class="field">
+                            <div class="field-name">Monthly Maximum</div>
+                            <div class="field-value" id="ltd-Monthly-Maximum">Pending...</div>
+                        </div>
+                        <div class="field">
+                            <div class="field-name">Tax Status</div>
+                            <div class="field-value" id="ltd-Tax-Status">Pending...</div>
+                        </div>
+                        <div class="field">
+                            <div class="field-name">Elimination Period</div>
+                            <div class="field-value" id="ltd-Elimination-Period">Pending...</div>
+                        </div>
+                        <div class="field">
+                            <div class="field-name">Benefit Period</div>
+                            <div class="field-value" id="ltd-Benefit-Period">Pending...</div>
+                        </div>
+                        <div class="field">
+                            <div class="field-name">Definition</div>
+                            <div class="field-value" id="ltd-Definition">Pending...</div>
+                        </div>
+                    </div>
+                `;
+        };
+
+        // Initialize the results container
+        setupResultsContainer();
+
+        // Add log entry
+        const addLogEntry = (message) => {
+          const entry = document.createElement("p");
+          entry.textContent = message;
+          logContainer.appendChild(entry);
+          logContainer.scrollTop = logContainer.scrollHeight;
+        };
+
+        // Start extraction
+        startBtn.addEventListener("click", function () {
+          const filename = filenameInput.value.trim();
+          if (!filename) {
+            alert("Please enter a filename");
+            return;
+          }
+
+          // Reset UI
+          setupResultsContainer();
+          progressBar.style.width = "0%";
+          progressPercentage.textContent = "0%";
+          currentField.textContent = "Starting extraction...";
+          logContainer.innerHTML = "<h3>Event Log</h3>";
+
+          // Update buttons
+          startBtn.disabled = true;
+          cancelBtn.disabled = false;
+
+          // Create EventSource connection
+          eventSource = new EventSource(
+            `http://localhost:8001/v1/extract-insurance-data-precise-stream?file_name=${encodeURIComponent(
+              filename,
+            )}`,
+          );
+
+          // Add log entry
+          addLogEntry(`Started extraction for ${filename}`);
+
+          // Listen for progress events
+          eventSource.addEventListener("progress", function (e) {
+            try {
+              const data = JSON.parse(e.data);
+              const progressData = data.data;
+
+              // Update progress bar
+              const percentage = progressData.percentage.toFixed(1);
+              progressBar.style.width = `${percentage}%`;
+              progressPercentage.textContent = `${percentage}%`;
+
+              // Update current field text
+              currentField.textContent = `Extracting: ${progressData.section} > ${progressData.field}`;
+
+              // Update field value in the UI
+              const sectionPrefix =
+                progressData.section === "LIFE INSURANCE & AD&D"
+                  ? "life"
+                  : progressData.section === "DEPENDENT LIFE"
+                  ? "dependent"
+                  : "ltd";
+
+              const fieldId = `${sectionPrefix}-${progressData.field.replace(
+                / /g,
+                "-",
+              )}`;
+              const fieldElement = document.getElementById(fieldId);
+
+              if (fieldElement) {
+                fieldElement.textContent = progressData.value || "Not found";
+              }
+
+              // Add log entry
+              addLogEntry(
+                `[${percentage}%] Extracted ${progressData.section} > ${
+                  progressData.field
+                }: ${progressData.value || "Not found"}`,
+              );
+            } catch (error) {
+              addLogEntry(`Error parsing progress event: ${error.message}`);
+            }
+          });
+
+          // Listen for completion event
+          eventSource.addEventListener("completion", function (e) {
+            try {
+              // Parse the complete data
+              const data = JSON.parse(e.data);
+              const finalData = data.data;
+
+              // Set progress to 100%
+              progressBar.style.width = "100%";
+              progressPercentage.textContent = "100%";
+              currentField.textContent = "Extraction completed";
+
+              // Add log entry
+              addLogEntry("Extraction completed successfully");
+
+              // Close the connection
+              if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+              }
+
+              // Reset buttons
+              startBtn.disabled = false;
+              cancelBtn.disabled = true;
+            } catch (error) {
+              addLogEntry(`Error parsing completion event: ${error.message}`);
+            }
+          });
+
+          // Listen for error events
+          eventSource.addEventListener("error", function (e) {
+            try {
+              const data = JSON.parse(e.data);
+              addLogEntry(`Error: ${data.data.error}`);
+            } catch (error) {
+              addLogEntry(`EventSource error: ${error.message}`);
+            }
+
+            // Close the connection
+            if (eventSource) {
+              eventSource.close();
+              eventSource = null;
+            }
+
+            // Reset buttons
+            startBtn.disabled = false;
+            cancelBtn.disabled = true;
+          });
+
+          // Listen for general errors
+          eventSource.onerror = function () {
+            addLogEntry("Connection to server lost or error occurred");
+
+            // Close the connection
+            if (eventSource) {
+              eventSource.close();
+              eventSource = null;
+            }
+
+            // Reset buttons
+            startBtn.disabled = false;
+            cancelBtn.disabled = true;
+          };
+        });
+
+        // Cancel extraction
+        cancelBtn.addEventListener("click", function () {
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+
+            // Add log entry
+            addLogEntry("Extraction cancelled by user");
+
+            // Reset buttons
+            startBtn.disabled = false;
+            cancelBtn.disabled = true;
+
+            // Update UI
+            currentField.textContent = "Extraction cancelled";
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

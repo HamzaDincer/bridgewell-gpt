@@ -7,6 +7,8 @@ from collections.abc import Iterable
 from enum import Enum
 from pathlib import Path
 from typing import Any
+import json
+import urllib.parse
 
 import gradio as gr  # type: ignore
 from fastapi import FastAPI
@@ -318,18 +320,6 @@ class PrivateGptUi:
 
         self._ingest_service.bulk_ingest([(str(path.name), path) for path in paths])
 
-    def _delete_all_files(self) -> Any:
-        ingested_files = self._ingest_service.list_ingested()
-        logger.debug("Deleting count=%s files", len(ingested_files))
-        for ingested_document in ingested_files:
-            self._ingest_service.delete(ingested_document.doc_id)
-        return [
-            gr.List(self._list_ingested_files()),
-            gr.components.Button(interactive=False),
-            gr.components.Button(interactive=False),
-            gr.components.Textbox("All files"),
-        ]
-
     def _delete_selected_file(self) -> Any:
         logger.debug("Deleting selected %s", self._selected_filename)
         # Note: keep looping for pdf's (each page became a Document)
@@ -344,12 +334,45 @@ class PrivateGptUi:
             gr.List(self._list_ingested_files()),
             gr.components.Button(interactive=False),
             gr.components.Button(interactive=False),
+            gr.components.Button(interactive=False),
             gr.components.Textbox("All files"),
         ]
 
+    def _delete_all_files(self) -> Any:
+        ingested_files = self._ingest_service.list_ingested()
+        logger.debug("Deleting count=%s files", len(ingested_files))
+        for ingested_document in ingested_files:
+            self._ingest_service.delete(ingested_document.doc_id)
+        return [
+            gr.List(self._list_ingested_files()),
+            gr.components.Button(interactive=False),
+            gr.components.Button(interactive=False),
+            gr.components.Button(interactive=False),
+            gr.components.Textbox("All files"),
+        ]
+
+    def _export_to_excel(self) -> str:
+        """Placeholder method for Excel export functionality.
+        
+        This will be connected to the Excel API endpoint later.
+        
+        Returns:
+            A message indicating the feature is coming soon
+        """
+        if not self._selected_filename:
+            return "Please select a file first before exporting to Excel."
+            
+        return """
+        <div style="padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin: 10px 0; background-color: #f9f9f9;">
+            <h3 style="margin-top: 0; color: #4a4a4a;">Excel Export</h3>
+            <p>This feature is coming soon!</p>
+        </div>
+        """
+        
     def _deselect_selected_file(self) -> Any:
         self._selected_filename = None
         return [
+            gr.components.Button(interactive=False),
             gr.components.Button(interactive=False),
             gr.components.Button(interactive=False),
             gr.components.Textbox("All files"),
@@ -358,6 +381,7 @@ class PrivateGptUi:
     def _selected_a_file(self, select_data: gr.SelectData) -> Any:
         self._selected_filename = select_data.value
         return [
+            gr.components.Button(interactive=True),
             gr.components.Button(interactive=True),
             gr.components.Button(interactive=True),
             gr.components.Textbox(self._selected_filename),
@@ -377,7 +401,7 @@ class PrivateGptUi:
             "justify-content: center;"
             "align-items: center;"
             "}"
-            ".logo img { height: 25% }"
+            ".logo img { height: 50% }"
             ".contain { display: flex !important; flex-direction: column !important; }"
             "#component-0, #component-3, #component-10, #component-8  { height: 100% !important; }"
             "#chatbot { flex-grow: 1 !important; overflow: auto !important;}"
@@ -390,7 +414,7 @@ class PrivateGptUi:
             ".footer-zylon-ico { height: 20px; margin-left: 5px; background-color: antiquewhite; border-radius: 2px; }",
         ) as blocks:
             with gr.Row():
-                gr.HTML(f"<div class='logo'/><img src={logo_svg} alt=PrivateGPT></div")
+                gr.HTML(f"<div class='logo'><img src={logo_svg} alt='PrivateGPT'></div>")
 
             with gr.Row(equal_height=False):
                 with gr.Column(scale=3):
@@ -436,22 +460,37 @@ class PrivateGptUi:
                     selected_text = gr.components.Textbox(
                         "All files", label="Selected for Query or Deletion", max_lines=1
                     )
-                    delete_file_button = gr.components.Button(
-                        "🗑️ Delete selected file",
-                        size="sm",
-                        visible=settings().ui.delete_file_button_enabled,
-                        interactive=False,
-                    )
-                    delete_files_button = gr.components.Button(
-                        "⚠️ Delete ALL files",
-                        size="sm",
-                        visible=settings().ui.delete_all_files_button_enabled,
-                    )
+                    
+                    # Row for file actions
+                    with gr.Row():
+                        # Add Export to Excel button
+                        export_excel_button = gr.components.Button(
+                            "📊 Export to Excel",
+                            size="sm",
+                            interactive=False
+                        )
+                        # Delete buttons
+                        delete_file_button = gr.components.Button(
+                            "🗑️ Delete selected file",
+                            size="sm",
+                            visible=settings().ui.delete_file_button_enabled,
+                            interactive=False
+                        )
+                        delete_files_button = gr.components.Button(
+                            "⚠️ Delete ALL files",
+                            size="sm",
+                            visible=settings().ui.delete_all_files_button_enabled,
+                        )
+                    
+                    # Add a result area for Excel export
+                    excel_export_result = gr.HTML(visible=True)
+                    
                     deselect_file_button.click(
                         self._deselect_selected_file,
                         outputs=[
                             delete_file_button,
                             deselect_file_button,
+                            export_excel_button,
                             selected_text,
                         ],
                     )
@@ -460,13 +499,22 @@ class PrivateGptUi:
                         outputs=[
                             delete_file_button,
                             deselect_file_button,
+                            export_excel_button,
                             selected_text,
                         ],
                     )
+                    
+                    # Connect the Excel export button to the placeholder function
+                    export_excel_button.click(
+                        fn=self._export_to_excel,
+                        outputs=excel_export_result
+                    )
+                    
                     delete_file_button.click(
                         self._delete_selected_file,
                         outputs=[
                             ingested_dataset,
+                            export_excel_button,
                             delete_file_button,
                             deselect_file_button,
                             selected_text,
@@ -476,6 +524,7 @@ class PrivateGptUi:
                         self._delete_all_files,
                         outputs=[
                             ingested_dataset,
+                            export_excel_button,
                             delete_file_button,
                             deselect_file_button,
                             selected_text,

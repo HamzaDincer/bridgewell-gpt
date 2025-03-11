@@ -1,0 +1,20 @@
+{
+  "LIFE INSURANCE & AD&D": {
+    "Schedule": "",
+    "Reduction": "",
+    "Non-Evidence Maximum": "",
+    "Termination Age": ""
+  },
+  "DEPENDENT LIFE": {
+    "Spouse": "",
+    "Child": "",
+    "Termination Age": ""
+  },
+  "LONG TERM DISABILITY": {
+    "Monthly Maximum": "",
+    "Tax Status": "",
+    "Elimination Period": "",
+    "Benefit Period": "",
+    "Definition": ""
+  }
+}

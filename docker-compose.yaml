@@ -22,6 +22,7 @@ services:
       PGPT_MODE: openai
       PGPT_OPENAI_API_KEY: ${OPENAI_API_KEY}
       PGPT_EMBED_MODE: openai
+      PGPT_OPENAI_MODEL: gpt-3.5-turbo
       PGPT_DEV_MODE: "true" # Enable development mode with auto-reload
     profiles:
       - openai

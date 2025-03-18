@@ -6,8 +6,7 @@
     "Termination Age": ""
   },
   "DEPENDENT LIFE": {
-    "Spouse": "",
-    "Child": "",
+    "Schedule": "",
     "Termination Age": ""
   },
   "LONG TERM DISABILITY": {
@@ -15,6 +14,40 @@
     "Tax Status": "",
     "Elimination Period": "",
     "Benefit Period": "",
-    "Definition": ""
+    "Definition": "",
+    "Offsets": "",
+    "Pre-Existing": "",
+    "Non-Evidence Maximum": "",
+    "Termination Age": ""
+  },
+  "HEALTH CARE": {
+    "Prescription Drugs": "",
+    "Pay Direct Drug Card": "",
+    "Maximum": "",
+    "Fertility Drugs": "",
+    "Smoking Cessations": "",
+    "Vaccines": "",
+    "Major Medical": "",
+    "Annual Deductible": "",
+    "Hospitalization": "",
+    "Orthotic Shoes": "",
+    "Orthotic Inserts": "",
+    "Hearing Aids": "",
+    "Vision Care": "",
+    "Eye Exams": "",
+    "Paramedical Practitioners": "",
+    "Included Specialists": [],
+    "Out of Country": "",
+    "Maximum Duration": "",
+    "Trip Cancellation": "",
+    "Private Duty Nursing": "",
+    "Survivor Benefit": "",
+    "Termination Age": "",
+    "Dependent Child Definition": "",
+    "Benefit Year": "",
+    "Second Medical Opinion": "",
+    "EAP": "",
+    "Digital Wellness Program": "",
+    "Virtual Healthcare Services": ""
   }
 }

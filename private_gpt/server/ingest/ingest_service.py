@@ -1,7 +1,7 @@
 import logging
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, AnyStr, BinaryIO
+from typing import TYPE_CHECKING, AnyStr, BinaryIO, Any, List
 
 from injector import inject, singleton
 from llama_index.core.node_parser import SentenceWindowNodeParser
@@ -123,3 +123,62 @@ class IngestService:
             "Deleting the ingested document=%s in the doc and index store", doc_id
         )
         self.ingest_component.delete(doc_id)
+
+    def get_document(self, doc_id: str) -> dict[str, Any] | None:
+        """Get a document's content and metadata by its ID.
+
+        Args:
+            doc_id: The ID of the document to retrieve.
+
+        Returns:
+            A dictionary containing the document's content and metadata, or None if not found.
+        """
+        try:
+            docstore = self.storage_context.docstore
+            ref_doc_info = docstore.get_ref_doc_info(doc_id)
+            if not ref_doc_info:
+                return None
+
+            # Get all nodes for this document
+            nodes = docstore.get_nodes(ref_doc_info.node_ids)
+            
+            # Combine the text from all nodes
+            text = "\n".join(node.get_content() for node in nodes)
+            
+            return {
+                "text": text,
+                "metadata": IngestedDoc.curate_metadata(ref_doc_info.metadata) if ref_doc_info.metadata else None
+            }
+        except ValueError:
+            logger.warning(f"Document {doc_id} not found", exc_info=True)
+            return None
+
+    def extract_benefit_pages(self, file_name: str, page_numbers: List[int]) -> Path:
+        """Extract benefit summary pages from a PDF file.
+        
+        Args:
+            file_name: Name of the file to extract pages from
+            page_numbers: List of page numbers to extract (1-based indexing)
+            
+        Returns:
+            Path to the new PDF containing only the specified pages
+        """
+        # Get the original file path
+        original_file_path = self.ingest_component.storage_context.docstore.get_ref_doc_info(file_name)
+        if not original_file_path:
+            # Try looking in the original_files directory
+            original_file_path = Path(self.ingest_component.storage_context.persist_dir) / "original_files" / file_name
+            if not original_file_path.exists():
+                raise FileNotFoundError(f"Original file not found: {file_name}")
+        
+        # Extract the specified pages
+        from private_gpt.components.ingest.ingest_helper import IngestionHelper
+        output_name = f"{Path(file_name).stem}_benefit_summary.pdf"
+        extracted_path = IngestionHelper.extract_pdf_pages(
+            file_path=original_file_path,
+            page_numbers=page_numbers,
+            output_name=output_name
+        )
+        
+        logger.info(f"Successfully extracted benefit summary pages to: {extracted_path}")
+        return extracted_path

@@ -17,6 +17,7 @@ from private_gpt.server.excel.excel_router import excel_router
 from private_gpt.server.health.health_router import health_router
 from private_gpt.server.ingest.ingest_router import ingest_router
 from private_gpt.server.recipes.summarize.summarize_router import summarize_router
+from private_gpt.server.extraction.extraction_router import extraction_router
 from private_gpt.settings.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ def create_app(root_injector: Injector) -> FastAPI:
     app.include_router(embeddings_router)
     app.include_router(health_router)
     app.include_router(excel_router)
+    app.include_router(extraction_router)
 
     # Add LlamaIndex simple observability
     global_handler = create_global_handler("simple")
@@ -59,13 +61,13 @@ def create_app(root_injector: Injector) -> FastAPI:
     if settings.ui.enabled:
         logger.debug("Importing the UI module")
         try:
-            from private_gpt.ui.ui import PrivateGptUi
+            from private_gpt.ui.production_ui import ProductionUI
         except ImportError as e:
             raise ImportError(
                 "UI dependencies not found, install with `poetry install --extras ui`"
             ) from e
 
-        ui = root_injector.get(PrivateGptUi)
+        ui = root_injector.get(ProductionUI)
         ui.mount_in_app(app, settings.ui.path)
 
     return app

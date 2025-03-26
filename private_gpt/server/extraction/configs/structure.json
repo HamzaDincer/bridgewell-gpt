@@ -9,14 +9,31 @@
     "Schedule": "",
     "Termination Age": ""
   },
+  "CRITICAL ILLNESS": {
+    "Schedule": "",
+    "Impairments": "",
+    "Termination Age": ""
+  },
   "LONG TERM DISABILITY": {
+    "Schedule": "",
     "Monthly Maximum": "",
     "Tax Status": "",
     "Elimination Period": "",
     "Benefit Period": "",
     "Definition": "",
     "Offsets": "",
+    "Cost of Living Adjustment": "",
     "Pre-Existing": "",
+    "Survivor Benefit": "",
+    "Non-Evidence Maximum": "",
+    "Termination Age": ""
+  },
+  "SHORT TERM DISABILITY": {
+    "Schedule": "",
+    "Weekly Maximum": "",
+    "Tax Status": "",
+    "Elimination Period": "",
+    "Benefit Period": "",
     "Non-Evidence Maximum": "",
     "Termination Age": ""
   },
@@ -42,7 +59,24 @@
     "Trip Cancellation": "",
     "Private Duty Nursing": "",
     "Survivor Benefit": "",
-    "Termination Age": "",
+    "Termination Age": ""
+  },
+  "DENTAL CARE": {
+    "Annual Deductible": "",
+    "Basic & Preventative": "",
+    "Periodontic & Endodontic": "",
+    "Annual Maximum": "",
+    "Major Restorative Services": "",
+    "Orthodontic Services": "",
+    "Lifetime Maximum": "",
+    "Recall Frequency": "",
+    "Scaling & Rooting Units": "",
+    "White Filings": "",
+    "Fee Guide": "",
+    "Survivor Benefit": "",
+    "Termination Age": ""
+  },
+  "Notes and Definitions": {
     "Dependent Child Definition": "",
     "Benefit Year": "",
     "Second Medical Opinion": "",

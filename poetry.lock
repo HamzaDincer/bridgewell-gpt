@@ -2772,6 +2772,42 @@ websocket-client = ">=0.32.0,<0.40.0 || >0.40.0,<0.41.dev0 || >=0.43.dev0"
 adal = ["adal (>=1.0.2)"]
 
 [[package]]
+name = "llama-cloud"
+version = "0.1.11"
+description = ""
+optional = false
+python-versions = "<4,>=3.8"
+groups = ["main"]
+files = [
+    {file = "llama_cloud-0.1.11-py3-none-any.whl", hash = "sha256:b703765d03783a5a0fc57a52adc9892f8b91b0c19bbecb85a54ad4e813342951"},
+    {file = "llama_cloud-0.1.11.tar.gz", hash = "sha256:d4be5b48659fd9fe1698727be257269a22d7f2733a2ed11bce7065768eb94cbe"},
+]
+
+[package.dependencies]
+certifi = ">=2024.7.4,<2025.0.0"
+httpx = ">=0.20.0"
+pydantic = ">=1.10"
+
+[[package]]
+name = "llama-cloud-services"
+version = "0.6.0"
+description = "Tailored SDK clients for LlamaCloud services."
+optional = false
+python-versions = "<4.0,>=3.9"
+groups = ["main"]
+files = [
+    {file = "llama_cloud_services-0.6.0-py3-none-any.whl", hash = "sha256:b9647e236ba4e13d0b04bf336ed4023e422a2a48d363258924056ef9eb8f688d"},
+    {file = "llama_cloud_services-0.6.0.tar.gz", hash = "sha256:9c1ed2849f8ba7374df16bdfda69bed145eb4a425b546048f5e751c48efe293a"},
+]
+
+[package.dependencies]
+click = ">=8.1.7,<9.0.0"
+llama-cloud = ">=0.1.11,<0.2.0"
+llama-index-core = ">=0.11.0"
+pydantic = "!=2.10"
+python-dotenv = ">=1.0.1,<2.0.0"
+
+[[package]]
 name = "llama-cpp-python"
 version = "0.2.90"
 description = "Python bindings for the llama.cpp library"
@@ -2794,6 +2830,23 @@ all = ["llama_cpp_python[dev,server,test]"]
 dev = ["black (>=23.3.0)", "httpx (>=0.24.1)", "mkdocs (>=1.4.3)", "mkdocs-material (>=9.1.18)", "mkdocstrings[python] (>=0.22.0)", "pytest (>=7.4.0)", "twine (>=4.0.2)"]
 server = ["PyYAML (>=5.1)", "fastapi (>=0.100.0)", "pydantic-settings (>=2.0.1)", "sse-starlette (>=1.6.1)", "starlette-context (>=0.3.6,<0.4)", "uvicorn (>=0.22.0)"]
 test = ["fastapi (>=0.100.0)", "httpx (>=0.24.1)", "pydantic-settings (>=2.0.1)", "pytest (>=7.4.0)", "scipy (>=1.10)", "sse-starlette (>=1.6.1)", "starlette-context (>=0.3.6,<0.4)"]
+
+[[package]]
+name = "llama-extract"
+version = "0.1.1"
+description = "Structured data extraction from files."
+optional = false
+python-versions = "<4.0,>=3.9"
+groups = ["main"]
+files = [
+    {file = "llama_extract-0.1.1-py3-none-any.whl", hash = "sha256:0f87f2e99ea2aab1b8d2be4398d7b368867f23b7cfdeaa1a6db1db57f0c119e4"},
+    {file = "llama_extract-0.1.1.tar.gz", hash = "sha256:01e618064f7ec6cb3e170a33d0e75a35d5305be205722125c0a1cbbbec9a48bb"},
+]
+
+[package.dependencies]
+llama-cloud = "0.1.11"
+llama-index-core = ">=0.11.0,<0.12.0"
+python-dotenv = ">=1.0.1,<2.0.0"
 
 [[package]]
 name = "llama-index-core"
@@ -5280,6 +5333,25 @@ full = ["Pillow (>=8.0.0)", "PyCryptodome ; python_version == \"3.6\"", "cryptog
 image = ["Pillow (>=8.0.0)"]
 
 [[package]]
+name = "pypdf2"
+version = "3.0.1"
+description = "A pure-python PDF library capable of splitting, merging, cropping, and transforming PDF files"
+optional = false
+python-versions = ">=3.6"
+groups = ["main"]
+files = [
+    {file = "PyPDF2-3.0.1.tar.gz", hash = "sha256:a74408f69ba6271f71b9352ef4ed03dc53a31aa404d29b5d31f53bfecfee1440"},
+    {file = "pypdf2-3.0.1-py3-none-any.whl", hash = "sha256:d16e4205cfee272fbdc0568b68d82be796540b1537508cef59388f839c191928"},
+]
+
+[package.extras]
+crypto = ["PyCryptodome"]
+dev = ["black", "flit", "pip-tools", "pre-commit (<2.18.0)", "pytest-cov", "wheel"]
+docs = ["myst_parser", "sphinx", "sphinx_rtd_theme"]
+full = ["Pillow", "PyCryptodome"]
+image = ["Pillow"]
+
+[[package]]
 name = "pypika"
 version = "0.48.9"
 description = "A SQL query builder API for Python"
@@ -7535,4 +7607,4 @@ vector-stores-qdrant = ["llama-index-vector-stores-qdrant"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.12"
-content-hash = "6277998704eaaa1d131c02af4ae9021735a76c60ba9792c1aeb35c3daa8efcd1"
+content-hash = "bfe2a537f0d96ce01ecaad3a6991ddbc743aaa7b84563fe12a79d6f64f5ce205"

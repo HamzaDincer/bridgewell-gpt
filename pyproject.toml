@@ -15,6 +15,12 @@ watchdog = "^4.0.1"
 transformers = "^4.44.2"
 docx2txt = "^0.8"
 cryptography = "^3.1"
+# PDF Processing
+PyPDF2 = "^3.0.0"
+# LlamaParse and dependencies
+llama-cloud = "0.1.11"
+llama-cloud-services = "0.6.0"
+llama-extract = "0.1.1"
 # Excel support
 openpyxl = "^3.1.2"
 # LlamaIndex core libs

@@ -1,0 +1,413 @@
+{
+  "company": "RBC",
+  "benefit_headers": {
+    "life_insurance": {
+      "headers": [
+        "(?i)GROUP BASIC TERM LIFE INSURANCE EMPLOYEE BENEFIT SUMMARY"
+      ],
+      "fields": {
+        "schedule": {
+          "prompt": "Find the amount of insurance for LIFE INSURANCE & AD&D. RBC typically lists this as amount of insurance for employee. Return only the amount like this: Flat 20,000$",
+          "format": "string",
+          "examples": ["Flat 20,000$", "Flat 50,000$"]
+        },
+        "reduction": {
+          "prompt": "Find the reduction clause. RBC generally includes age-based reductions in the Life Insurance section. Return as a string like 'Reduces by 65% at age 65, further reduces to 50% at age 750'",
+          "format": "string",
+          "examples": [
+            "Reduces by 65% at age 65, further reduces to 50% at age 75",
+            "Reduces by 50% at age 70",
+            "Reduces by 35% at age 65, further reduces to 25% at age 70"
+          ]
+        },
+        "non_evidence_maximum": {
+          "prompt": "Find the non-evidence maximum. RBC generally includes a no-evidence maximum in the Life Insurance section. Return as a string.",
+          "format": "string",
+          "examples": ["25,000$", "50,000$"]
+        },
+        "termination_age": {
+          "prompt": "Find the age at which coverage terminates. Look for text about when coverage ends or maximum age limits. Return as a string.",
+          "format": "string",
+          "examples": ["70", "65", "75"]
+        }
+      }
+    },
+    "dependent_life_insurance": {
+      "headers": [
+        "(?i)GROUP BASIC TERM LIFE INSURANCE DEPENDENTS BENEFIT SUMMARY"
+      ],
+      "fields": {
+        "schedule": {
+          "prompt": "Find the amount of insurance for dependents. Look for specific amounts for spouse and children. Return as a string or object with spouse and child amounts.",
+          "format": "object",
+          "examples": [
+            { "spouse": "10,000$", "children": "5,000$" },
+            { "spouse": "20,000$", "children": "10,000$" },
+            { "spouse": "15,000$", "children": "7,500$" }
+          ]
+        },
+        "termination_age": {
+          "prompt": "Find the age at which dependent coverage terminates. Look for text about when coverage ends or maximum age limits. Return as a string.",
+          "format": "string",
+          "examples": ["70", "65", "75"]
+        }
+      }
+    },
+    "long_term_disability": {
+      "headers": ["GROUP LONG TERM DISABILITY\\s*\\(LTD\\)\\s*BENEFIT SUMMARY"],
+      "fields": {
+        "schedule": {
+          "prompt": "Find the benefit amount calculation or schedule. Look for formulas, percentages, or tables showing how the benefit amount is determined. Return as a string.",
+          "format": "string",
+          "examples": [
+            "66.67% of monthly earnings",
+            "60% of monthly earnings",
+            "70% of monthly earnings"
+          ]
+        },
+        "monthly_maximum": {
+          "prompt": "Find the monthly maximum benefit amount. Look for the maximum amount that can be paid per month. Return as a string.",
+          "format": "string",
+          "examples": ["$5,000", "$10,000", "$15,000"]
+        },
+        "tax_status": {
+          "prompt": "Find the tax status of the benefit. Look for text about whether the benefit is taxable or not. Return as a string.",
+          "format": "string",
+          "examples": ["Taxable", "Non-Taxable"]
+        },
+        "elimination_period": {
+          "prompt": "Find the elimination period or waiting period before benefits begin. Look for text about how long an employee must be disabled before benefits start. Return as a string.",
+          "format": "string",
+          "examples": ["120 days", "90 days", "180 days"]
+        },
+        "benefit_period": {
+          "prompt": "Find the maximum period for which benefits will be paid. Look for text about how long benefits will continue or when they end. Return as a string.",
+          "format": "string",
+          "examples": ["To age 65", "To age 70", "24 months"]
+        },
+        "definition": {
+          "prompt": "Find the definition of long term disability. Look for text about what constitutes a disability. Return as a string.",
+          "format": "string",
+          "examples": [
+            "2 years (24 months) own occupation",
+            "1 years (12 months) any occupation"
+          ]
+        },
+        "offsets": {
+          "prompt": "Find the offsets for the benefit. Look for text about any offsets or reductions in the benefit amount. Return as a string.",
+          "format": "string",
+          "examples": ["Primary", "Primary Direct, Family Indirect"]
+        },
+        "cost_of_living_adjustment": {
+          "prompt": "Find the cost of living adjustment for the benefit. Look for text about any cost of living adjustments or increases in the benefit amount. Return as a string.",
+          "format": "string",
+          "examples": ["Consumer Price index or 2%, whichever is less"]
+        },
+        "pre_existing": {
+          "prompt": "Find the pre-existing condition exclusion for the benefit. Look for text about any pre-existing condition exclusions. Format the response as in the examples.",
+          "format": "string",
+          "examples": [
+            "13 weeks if treatment free; otherwise 12 months",
+            "90 days / 12 months",
+            "3 months / 12 months"
+          ]
+        },
+        "survivor_benefit": {
+          "prompt": "Find the survivor benefit for the benefit. Look for text about any survivor benefits. Return as a string.",
+          "format": "string",
+          "examples": ["3 months", "6 months", "12 months"]
+        },
+        "non_evidence_maximum": {
+          "prompt": "Find the non-evidence maximum for the benefit. Look for text about any non-evidence maximums. Return as a string.",
+          "format": "string",
+          "examples": ["$5,000", "$10,000", "$15,000"]
+        },
+        "termination_age": {
+          "prompt": "Find the termination age for the benefit. Look for text about any termination ages. Return as a string.",
+          "format": "string",
+          "examples": ["65", "70", "75"]
+        }
+      }
+    },
+    "health_care": {
+      "headers": ["GROUP EXTENDED HEALTH CARE\\s*\\(EHC\\)\\s*BENEFIT SUMMARY"],
+      "fields": {
+        "prescription_drugs": {
+          "prompt": "Find the prescription drug coverage details. Look for text about drug card, coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": [
+            "100% - Equal to dispensing fee deductible per prescription",
+            "80% - Nil deductible",
+            "100% - Nil deductible"
+          ]
+        },
+        "pay_direct_drug_card": {
+          "prompt": "Find the pay direct drug card details. Look for text about drug card, coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": ["Included - Generic Mandatory", "Not included"]
+        },
+        "maximum": {
+          "prompt": "Find the maximum annual benefit for the benefit. Look for text about any maximum annual benefits. Return as a string.",
+          "format": "string",
+          "examples": ["unlimited", "100% of deductible"]
+        },
+        "fertility_drugs": {
+          "prompt": "Find the fertility drug coverage details. Look for text about drug card, coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": [
+            "$2,400 lifetime maximum",
+            "$15,000 lifetime maximum",
+            "6 cycles to $2,500 lifetime maximum"
+          ]
+        },
+        "smoking_cessations": {
+          "prompt": "Find the smoking cessation coverage details. Look for text about smoking cessation coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": [
+            "$300 lifetime maximum",
+            "Included - reasonable & customary maximum",
+            "$3,000 lifetime maximum"
+          ]
+        },
+        "vaccines": {
+          "prompt": "Find the vaccine coverage details. Look for text about vaccine coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": [
+            "Included - reasonable & customary maximum",
+            "Not included"
+          ]
+        },
+        "major_medical": {
+          "prompt": "Find the major medical coverage details. Look for text about major medical coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": ["100%"]
+        },
+        "annual_deductible": {
+          "prompt": "Find the annual deductible for the benefit. Look for text about any annual deductibles. Return as a string.",
+          "format": "string",
+          "examples": ["None"]
+        },
+        "hospitalization": {
+          "prompt": "Find the hospitalization coverage details. Look for text about hospitalization coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": ["100% - Nil deductible - Semi-Private"]
+        },
+        "orthotic_shoes": {
+          "prompt": "Find the orthotic shoe coverage details. Look for text about orthotic shoe coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": [
+            "$250 per benefit year maximum",
+            "$150 per benefit year maximum"
+          ]
+        },
+        "orthotic_inserts": {
+          "prompt": "Find the orthotic insert coverage details. Look for text about orthotic insert coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": [
+            "$250 per benefit year maximum",
+            "$150 per benefit year maximum",
+            "$400 every 3 years"
+          ]
+        },
+        "hearing_aids": {
+          "prompt": "Find the hearing aid coverage details. Look for text about hearing aid coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": [
+            "$500 every 5 years",
+            "$150 per benefit year maximum",
+            "$400 every 3 years"
+          ]
+        },
+        "vision_care": {
+          "prompt": "Find the vision care coverage details. Look for text about vision care coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": [
+            "100% - $200 every 2 years, 1 year for dependents under 18",
+            "100% - $200 every 2 years",
+            "$200 every 24 months"
+          ]
+        },
+        "eye_exams": {
+          "prompt": "Find the eye exam coverage details. Look for text about eye exam coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": [
+            "1 visit every 2 years - reasonable & customary maximum",
+            "1 visit every 24 months, 12 months for dependents under 18, "
+          ]
+        },
+        "paramedical_practitioners": {
+          "prompt": "Find the paramedical practitioner coverage details. Look for text about paramedical practitioner coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": [
+            "100% - $500 per practitioner per benefit year maximum",
+            "1 visit every 24 months, 12 months for dependents under 18, "
+          ]
+        },
+        "included_specialists": {
+          "prompt": "Find the included specialists coverage details. Look for text about included specialists coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": [
+            "Chiropractor",
+            "Osteopath",
+            "Naturopath - combined with Dietician",
+            "Dietician - combined with Naturopath",
+            "Podiatrist - combined with Chiropodist",
+            "Chiropodist - combined with Podiatrist",
+            "Speech Therapist - combined with Audiologist",
+            "Audiologist - combined with Speech Therapist",
+            "Massage Therapist",
+            "Physiotherapist - combined with Athletic Therapist",
+            "Athletic Therapist - combined with Physiotherapist",
+            "Acupuncturist",
+            "Psychologist - combined with Social Worker",
+            "Social Worker - combined with Psychologist",
+            "No Doctor's referral required on any paramedical services"
+          ]
+        },
+        "out_of_country": {
+          "prompt": "Find the out of country coverage details. Look for text about out of country coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": [
+            "100% - Nil deductible - $3,000,000 lifetime maximum",
+            "100% - Nil deductible - Unlimited",
+            "100% - Nil deductible - $5,000,000 per incident maximum"
+          ]
+        },
+        "maximum_duration": {
+          "prompt": "Find the maximum duration for the benefit. Look for text about any maximum durations. Return as a string.",
+          "format": "string",
+          "examples": [
+            "60 consecutive days",
+            "90 consecutive days",
+            "180 consecutive days"
+          ]
+        },
+        "trip_cancellation": {
+          "prompt": "Find the trip cancellation coverage details. Look for text about trip cancellation coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": ["Included - $5,000 per trip maximum", "Not included"]
+        },
+        "private_duty_nursing": {
+          "prompt": "Find the private duty nursing coverage details. Look for text about private duty nursing coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": ["$10,000 per benefit year maximum"]
+        },
+        "survivor_benefit": {
+          "prompt": "Find the survivor benefit for the benefit. Look for text about any survivor benefits. Return as a string.",
+          "format": "string",
+          "examples": ["24 months"]
+        },
+        "termination_age": {
+          "prompt": "Find the termination age for health care benefit. Return as a string.",
+          "format": "string",
+          "examples": ["65", "70", "75", "Retirement - no age limitation"]
+        }
+      }
+    },
+    "dental_care": {
+      "headers": ["(?i)GROUP DENTAL CARE\\s*\\(DTL\\)\\s*BENEFIT SUMMARY"],
+      "fields": {
+        "annual_deductible": {
+          "prompt": "Find the dental deductible amounts. Look for text about deductibles for different coverage types. Return as a string or object with different deductible amounts.",
+          "format": "string",
+          "examples": [
+            "None",
+            "$25 Single; $50 per Family",
+            "$50 Single; $100 per Family"
+          ]
+        },
+        "basic_and_preventative": {
+          "prompt": "Find the basic and preventative coverage details. Look for text about basic and preventative coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": ["%100"]
+        },
+        "periodontic_and_endodontic": {
+          "prompt": "Find the periodontic and endodontic coverage details. Look for text about periodontic and endodontic coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": ["%100"]
+        },
+        "annual_maximum": {
+          "prompt": "Find the annual maximum for the benefit. Look for text about any annual maximums. Return as a string.",
+          "format": "string",
+          "examples": [
+            "$1,500 per benefit year",
+            "$1,500 per benefit year combined maximum with major "
+          ]
+        },
+        "major_restorative_services": {
+          "prompt": "Find the major restorative services coverage details. Look for text about major restorative services coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": ["50%"]
+        },
+        "annual_maximum_for_major_restorative_services": {
+          "prompt": "Find the annual maximum for major restorative services for the benefit. Look for text about any annual maximums. Return as a string.",
+          "format": "string",
+          "examples": [
+            "$1,500 per benefit year",
+            "$1,500 per benefit year combined maximum with basic, preventative, endodontic & periodontic services"
+          ]
+        },
+        "orthodontic_services": {
+          "prompt": "Find the orthodontic services coverage details. Look for text about orthodontic services coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": ["50%"]
+        },
+        "lifetime_maximum": {
+          "prompt": "Find the lifetime maximum for the orthodontic services. Look for text about any lifetime maximums. Return as a string.",
+          "format": "string",
+          "examples": [
+            "$1,500 lifetime maximum (dependent children under 19)",
+            "$1,500 per benefit year combined maximum with basic, preventative, endodontic & periodontic services"
+          ]
+        },
+        "recall_frequency": {
+          "prompt": "Find the recall frequency for the orthodontic services. Look for text about any recall frequencies. Return as a string.",
+          "format": "string",
+          "examples": [
+            "Every 6 months",
+            "Every 9 months",
+            "Twice/two visits per benefit year"
+          ]
+        },
+        "scaling_and_rooting_units": {
+          "prompt": "Find the scaling and rooting units coverage details. Look for text about scaling and rooting units coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": [
+            "10 in any 12 month period",
+            "6 per benefit year, plus 1 per recall",
+            "10 per benefit year"
+          ]
+        },
+        "white_filings": {
+          "prompt": "Find the white filings coverage details. Look for text about white filings coverage levels, and any limitations. Return as a string or object with coverage details.",
+          "format": "string",
+          "examples": ["Included - All teeth"]
+        },
+        "fee_guide": {
+          "prompt": "Find the fee guide for the benefit. Look for text about any fee guides. Return as a string.",
+          "format": "string",
+          "examples": ["Current"]
+        },
+        "survivor_benefit": {
+          "prompt": "Find the survivor benefit for the benefit. Look for text about any survivor benefits. Return as a string.",
+          "format": "string",
+          "examples": ["24 months"]
+        },
+        "termination_age": {
+          "prompt": "Find the termination age for the benefit. Look for text about any termination ages. Return as a string.",
+          "format": "string",
+          "examples": ["65", "70", "75"]
+        }
+      }
+    }
+  },
+  "document_structure": {
+    "start_markers": ["BENEFIT SUMMARIES"],
+    "end_markers": [
+      "GENERAL DEFINITIONS",
+      "GENERAL INFORMATION",
+      "The following definitions are used throughout the entire policy"
+    ],
+    "toc_markers": ["TABLE OF CONTENTS"]
+  }
+}

@@ -51,7 +51,7 @@ llm:
   prompt_style: "default"
   # Should be matching the selected model
   max_new_tokens: 512
-  context_window: 32000
+  context_window: 128000
   # Select your tokenizer. Llama-index tokenizer is the default.
   # tokenizer: meta-llama/Meta-Llama-3.1-8B-Instruct
   temperature: 0.1 # The temperature of the model. Increasing the temperature will make the model answer more creatively. A value of 0.1 would be more factual. (Default: 0.1)
@@ -64,7 +64,7 @@ rag:
   rerank:
     enabled: true
     model: cross-encoder/ms-marco-MiniLM-L-2-v2
-    top_n: 3
+    top_n: 5
 
 summarize:
   use_async: true
@@ -126,9 +126,9 @@ sagemaker:
 
 openai:
   api_key: ${PGPT_OPENAI_API_KEY}
-  model: gpt-3.5-turbo
+  model: gpt-4o
   embedding_api_key: ${PGPT_OPENAI_API_KEY}
-  embedding_model: text-embedding-ada-002
+  embedding_model: text-embedding-3-small
 
 ollama:
   llm_model: llama3.1

@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: bridgewell-gpt
+    env: python
+    buildCommand: |
+      pip install -r requirements.txt
+      python -m pip install --upgrade pip
+    startCommand: python -m uvicorn private_gpt.server.server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.12
+      - key: PORT
+        value: 8001
+      - key: PGPT_PROFILES
+        value: docker
+      - key: PGPT_MODE
+        value: openai
+      - key: PGPT_EMBED_MODE
+        value: openai
+      - key: PGPT_OPENAI_MODEL
+        value: gpt-4o
+      - key: PGPT_DEV_MODE
+        value: "false"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: LLAMA_CLOUD_API_KEY
+        sync: false
+      - key: SERVER_CORS_ENABLED
+        value: "true"
+      - key: SERVER_CORS_ALLOW_ORIGINS
+        value: "*"
+      - key: SERVER_CORS_ALLOW_METHODS
+        value: "GET,POST,PUT,DELETE,OPTIONS"
+      - key: SERVER_CORS_ALLOW_HEADERS
+        value: "*"
+      - key: UI_ENABLED
+        value: "true"
+      - key: UI_PATH
+        value: "/"

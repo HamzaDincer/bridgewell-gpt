@@ -1,0 +1,181 @@
+{
+  "company": "Sunlife",
+  "benefit_headers": {
+    "general_information": {
+      "headers": ["General Information"],
+      "fields": {
+        "waiting_period": {
+          "prompt": "Find the waiting period for coverage",
+          "format": "string",
+          "examples": ["90 days of continuous employment"]
+        },
+        "termination": {
+          "prompt": "Find when coverage terminates",
+          "format": "string",
+          "examples": [
+            "Termination of coverage may vary from benefit to benefit"
+          ]
+        }
+      }
+    },
+    "extended_health_care": {
+      "headers": ["Extended Health Care"],
+      "fields": {
+        "benefit_year": {
+          "prompt": "Find the benefit year period",
+          "format": "string",
+          "examples": ["January 1 to December 31"]
+        },
+        "deductible": {
+          "prompt": "Find the deductible amounts for prescription drugs and other expenses",
+          "format": "object",
+          "examples": [
+            {
+              "prescription_drugs": "$5.00 for each prescription or refill",
+              "other_expenses": "none"
+            }
+          ]
+        },
+        "drug_card_plan": {
+          "prompt": "Is drug card plan included?",
+          "format": "string",
+          "examples": ["Included"]
+        },
+        "reimbursement_level": {
+          "prompt": "Find the reimbursement level for prescription drugs",
+          "format": "string",
+          "examples": ["80% after the prescription drug deductible"]
+        }
+      }
+    },
+    "dental_care": {
+      "headers": ["Dental Care"],
+      "fields": {
+        "benefit_year": {
+          "prompt": "Find the benefit year period",
+          "format": "string",
+          "examples": ["January 1 to December 31"]
+        },
+        "deductible": {
+          "prompt": "Find the dental deductible amount",
+          "format": "string",
+          "examples": ["None"]
+        },
+        "fee_guide": {
+          "prompt": "Find the fee guide used",
+          "format": "string",
+          "examples": [
+            "The current fee guide for general practitioners in the province where the employee lives"
+          ]
+        }
+      }
+    },
+    "long_term_disability": {
+      "headers": ["Long-Term Disability"],
+      "fields": {
+        "maximum_amount": {
+          "prompt": "Find the maximum benefit amount",
+          "format": "string",
+          "examples": [
+            "66.67% of your monthly basic earnings up to a maximum of $5,000"
+          ]
+        },
+        "elimination_period": {
+          "prompt": "Find the elimination period",
+          "format": "string",
+          "examples": ["4 months"]
+        },
+        "tax_status": {
+          "prompt": "Find the tax status of the benefit",
+          "format": "string",
+          "examples": ["benefit payments are not taxable income"]
+        }
+      }
+    },
+    "critical_illness": {
+      "headers": ["Critical Illness", "Critical Illness – Contract No. 91316"],
+      "fields": {
+        "amount": {
+          "prompt": "Find the benefit amount",
+          "format": "string",
+          "examples": ["$10,000"]
+        },
+        "termination": {
+          "prompt": "Find when coverage terminates",
+          "format": "string",
+          "examples": ["When you retire or reach age 65, whichever is earlier"]
+        }
+      }
+    },
+    "life": {
+      "headers": ["Life", "Employee Life"],
+      "fields": {
+        "amount": {
+          "prompt": "Find the life insurance amount",
+          "format": "string",
+          "examples": [
+            "2 times your annual basic earnings rounded to the next higher $1,000"
+          ]
+        },
+        "maximum": {
+          "prompt": "Find the maximum coverage amount",
+          "format": "string",
+          "examples": ["$250,000"]
+        },
+        "minimum": {
+          "prompt": "Find the minimum coverage amount",
+          "format": "string",
+          "examples": ["$20,000"]
+        },
+        "reduction": {
+          "prompt": "Find any reduction in coverage due to age",
+          "format": "string",
+          "examples": [
+            "Coverage is reduced to 50% of the above amount when you reach age 65"
+          ]
+        }
+      }
+    },
+    "dependent_life": {
+      "headers": ["Dependent Life"],
+      "fields": {
+        "spouse_amount": {
+          "prompt": "Find the spouse coverage amount",
+          "format": "string",
+          "examples": ["$5,000"]
+        },
+        "child_amount": {
+          "prompt": "Find the child coverage amount",
+          "format": "string",
+          "examples": ["$2,500"]
+        }
+      }
+    },
+    "add": {
+      "headers": [
+        "Accidental Death and Dismemberment",
+        "Employee Accidental Death and Dismemberment"
+      ],
+      "fields": {
+        "amount": {
+          "prompt": "Find the AD&D coverage amount",
+          "format": "string",
+          "examples": ["Equal to Employee Life coverage"]
+        },
+        "termination": {
+          "prompt": "Find when coverage terminates",
+          "format": "string",
+          "examples": ["When you retire or reach age 70, whichever is earlier"]
+        }
+      }
+    }
+  },
+  "document_structure": {
+    "toc_markers": ["Table of Contents", "Contents"],
+    "start_markers": ["Benefit Summary", "General Information"],
+    "end_markers": [
+      "Effective May 1, 2022",
+      "This section includes a description"
+    ]
+  }
+}

@@ -357,26 +357,23 @@ class AzureOpenAISettings(BaseModel):
 class UISettings(BaseModel):
     enabled: bool
     path: str
-    default_mode: Literal["RAG", "Search", "Basic", "Summarize"] = Field(
-        "RAG",
-        description="The default mode.",
-    )
-    default_chat_system_prompt: str = Field(
-        None,
-        description="The default system prompt to use for the chat mode.",
-    )
-    default_query_system_prompt: str = Field(
-        None, description="The default system prompt to use for the query mode."
-    )
-    default_summarization_system_prompt: str = Field(
-        None,
-        description="The default system prompt to use for the summarization mode.",
-    )
     delete_file_button_enabled: bool = Field(
         True, description="If the button to delete a file is enabled or not."
     )
     delete_all_files_button_enabled: bool = Field(
         False, description="If the button to delete all files is enabled or not."
+    )
+    max_file_size_mb: int = Field(
+        50, description="Maximum file size in MB for PDF uploads."
+    )
+    allowed_file_types: list[str] = Field(
+        ["pdf"], description="List of allowed file types for upload."
+    )
+    output_directory: str = Field(
+        "extraction/output", description="Directory for storing extraction results."
+    )
+    template_directory: str = Field(
+        "extraction/templates", description="Directory for storing Excel templates."
     )
 
 

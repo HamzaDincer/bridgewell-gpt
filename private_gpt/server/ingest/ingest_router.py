@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
@@ -102,3 +102,22 @@ def delete_ingested(request: Request, doc_id: str) -> None:
     """
     service = request.state.injector.get(IngestService)
     service.delete(doc_id)
+
+
+@ingest_router.get("/ingest/{doc_id}", tags=["Ingestion"])
+def get_document(request: Request, doc_id: str) -> dict[str, Any]:
+    """Get a document's content and metadata by its ID.
+
+    The `doc_id` can be obtained from the `GET /ingest/list` endpoint.
+    
+    Returns:
+        A dictionary containing the document's content and metadata.
+        
+    Raises:
+        HTTPException: If the document is not found.
+    """
+    service = request.state.injector.get(IngestService)
+    doc = service.get_document(doc_id)
+    if not doc:
+        raise HTTPException(404, f"Document {doc_id} not found")
+    return doc

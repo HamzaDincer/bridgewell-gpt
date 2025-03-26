@@ -1,0 +1,250 @@
+{
+  "company": "BBD",
+  "benefit_headers": {
+    "employee_life_insurance": {
+      "headers": ["(?i)LIFE INSURANCE", "(?i)GROUP LIFE INSURANCE"],
+      "fields": {
+        "Schedule": {
+          "prompt": "Find the amount of insurance for Life Insurance. Look for a multiple of salary or flat amount.",
+          "format": "string",
+          "examples": [
+            "3.0 times the Employee's annual Salary, rounded to the next highest $1,000",
+            "2x Annual Salary",
+            "Flat 100,000$"
+          ]
+        },
+        "Non-Evidence Maximum": {
+          "prompt": "Find the non-evidence maximum amount. This is often listed as the maximum amount without medical evidence.",
+          "format": "string",
+          "examples": ["250,000$", "500,000$", "1,000,000$"]
+        },
+        "Reduction": {
+          "prompt": "Find the reduction schedule for life insurance benefits. Look for age-based reductions.",
+          "format": "string",
+          "examples": [
+            "Reduces by 50% at age 65",
+            "Reduces by 50% at age 65, further reduces to 25% at age 70",
+            "Reduces by 35% at age 65"
+          ]
+        },
+        "Termination Age": {
+          "prompt": "Find the age at which life insurance coverage terminates.",
+          "format": "string",
+          "examples": ["70", "65", "Earlier of retirement or age 75"]
+        }
+      }
+    },
+    "dependent_life_insurance": {
+      "headers": [
+        "(?i)DEPENDENT LIFE INSURANCE",
+        "(?i)DEPENDENT'S LIFE INSURANCE"
+      ],
+      "fields": {
+        "Amount of Insurance": {
+          "prompt": "Find the amount of insurance for dependents. Look for specific amounts for spouse and children.",
+          "format": "object",
+          "examples": [
+            { "spouse": "10,000$", "children": "5,000$" },
+            { "spouse": "20,000$", "children": "10,000$" },
+            { "spouse": "25,000$", "children": "12,500$" }
+          ]
+        },
+        "Termination Age": {
+          "prompt": "Find the age at which dependent coverage terminates.",
+          "format": "string",
+          "examples": ["70", "65", "Earlier of retirement or age 75"]
+        }
+      }
+    },
+    "std": {
+      "headers": [
+        "(?i)SHORT TERM DISABILITY",
+        "(?i)SHORT-TERM DISABILITY",
+        "(?i)STD"
+      ],
+      "fields": {
+        "Benefit Amount": {
+          "prompt": "Find the benefit amount or percentage of salary for STD.",
+          "format": "string",
+          "examples": [
+            "66.67% of weekly earnings",
+            "70% of weekly salary to a maximum of $1,500",
+            "75% for weeks 1-17, 65% for weeks 18-52"
+          ]
+        },
+        "Maximum Benefit": {
+          "prompt": "Find the maximum weekly benefit amount.",
+          "format": "string",
+          "examples": ["$1,500 per week", "$2,000 per week", "EI Maximum"]
+        },
+        "Elimination Period": {
+          "prompt": "Find the waiting period before STD benefits begin.",
+          "format": "string",
+          "examples": ["7 days", "0 days accident, 7 days sickness", "3 days"]
+        },
+        "Maximum Benefit Period": {
+          "prompt": "Find how long STD benefits are payable.",
+          "format": "string",
+          "examples": ["17 weeks", "26 weeks", "52 weeks"]
+        }
+      }
+    },
+    "ltd": {
+      "headers": [
+        "(?i)LONG TERM DISABILITY",
+        "(?i)LONG-TERM DISABILITY",
+        "(?i)LTD"
+      ],
+      "fields": {
+        "Benefit Amount": {
+          "prompt": "Find the benefit amount calculation for LTD.",
+          "format": "string",
+          "examples": [
+            "66.67% of monthly earnings to a maximum of $6,000",
+            "60% of the first $2,500 plus 40% of the balance",
+            "70% of monthly earnings"
+          ]
+        },
+        "Maximum Benefit": {
+          "prompt": "Find the maximum monthly benefit amount.",
+          "format": "string",
+          "examples": [
+            "$6,000 per month",
+            "$10,000 per month",
+            "$15,000 per month"
+          ]
+        },
+        "Elimination Period": {
+          "prompt": "Find the waiting period before LTD benefits begin.",
+          "format": "string",
+          "examples": ["119 days", "17 weeks", "180 days"]
+        },
+        "Maximum Benefit Period": {
+          "prompt": "Find how long LTD benefits are payable.",
+          "format": "string",
+          "examples": [
+            "To age 65",
+            "5 years",
+            "2 years own occupation, to age 65 any occupation"
+          ]
+        }
+      }
+    },
+    "critical_illness": {
+      "headers": ["(?i)CRITICAL ILLNESS INSURANCE", "(?i)CRITICAL ILLNESS"],
+      "fields": {
+        "Benefit Amount": {
+          "prompt": "Find the benefit amount for Critical Illness insurance.",
+          "format": "string",
+          "examples": [
+            "25,000$",
+            "50,000$",
+            "2x Annual Salary to maximum 100,000$"
+          ]
+        },
+        "Covered Conditions": {
+          "prompt": "Find the list of covered critical illnesses.",
+          "format": "string",
+          "examples": [
+            "Cancer, Heart Attack, Stroke",
+            "25 covered conditions including Cancer, Heart Attack, Stroke",
+            "22 covered conditions"
+          ]
+        },
+        "Survival Period": {
+          "prompt": "Find the survival period requirement.",
+          "format": "string",
+          "examples": ["30 days", "14 days", "90 days"]
+        }
+      }
+    },
+    "dental_care": {
+      "headers": ["(?i)DENTAL CARE", "(?i)DENTAL INSURANCE"],
+      "fields": {
+        "Deductible": {
+          "prompt": "Find the dental deductible amounts.",
+          "format": "object",
+          "examples": [
+            { "single": "$25", "family": "$50" },
+            { "single": "$50", "family": "$100" },
+            { "single": "None", "family": "None" }
+          ]
+        },
+        "Reimbursement Levels": {
+          "prompt": "Find the reimbursement percentages for different types of dental services.",
+          "format": "object",
+          "examples": [
+            { "basic": "100%", "major": "50%", "orthodontics": "50%" },
+            { "basic": "80%", "major": "50%", "orthodontics": "Not covered" },
+            { "basic": "90%", "major": "60%", "orthodontics": "60%" }
+          ]
+        },
+        "Maximum": {
+          "prompt": "Find the maximum benefit amounts for dental care.",
+          "format": "object",
+          "examples": [
+            { "annual": "$1,500", "lifetime_orthodontic": "$3,000" },
+            { "annual": "$2,000", "lifetime_orthodontic": "$2,500" },
+            { "annual": "Unlimited", "lifetime_orthodontic": "$2,000" }
+          ]
+        }
+      }
+    },
+    "extended_health": {
+      "headers": [
+        "(?i)EXTENDED HEALTH SERVICES",
+        "(?i)EXTENDED HEALTH CARE",
+        "(?i)EHS"
+      ],
+      "fields": {
+        "Deductible": {
+          "prompt": "Find the extended health deductible amounts.",
+          "format": "object",
+          "examples": [
+            { "single": "$25", "family": "$50" },
+            { "single": "$50", "family": "$100" },
+            { "single": "None", "family": "None" }
+          ]
+        },
+        "Prescription Drugs": {
+          "prompt": "Find the prescription drug coverage details.",
+          "format": "object",
+          "examples": [
+            { "coverage": "80%", "maximum": "$5,000 per year" },
+            { "coverage": "100%", "maximum": "Unlimited" },
+            {
+              "coverage": "90% after deductible",
+              "maximum": "$10,000 per year"
+            }
+          ]
+        },
+        "Hospital": {
+          "prompt": "Find the hospital room coverage.",
+          "format": "string",
+          "examples": [
+            "Semi-private room",
+            "Private room",
+            "Ward accommodation"
+          ]
+        },
+        "Paramedical Services": {
+          "prompt": "Find the coverage for paramedical practitioners.",
+          "format": "object",
+          "examples": [
+            { "per_visit": "$50", "annual_max": "$500 per practitioner" },
+            { "per_visit": "$75", "annual_max": "$750 combined" },
+            {
+              "per_visit": "Reasonable and customary",
+              "annual_max": "$1,000 per practitioner"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "document_structure": {
+    "start_markers": ["Schedule of Benefits"],
+    "end_markers": ["General Provisions"],
+    "toc_markers": ["Table of Contents"]
+  }
+}

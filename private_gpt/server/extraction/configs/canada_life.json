@@ -1,0 +1,47 @@
+{
+  "company": "CanadaLife",
+  "benefit_headers": {
+    "life_insurance": {
+      "headers": [
+        "LIFE INSURANCE",
+        "BASIC LIFE",
+        "OPTIONAL LIFE",
+        "GROUP LIFE INSURANCE"
+      ],
+      "subsections": [
+        "AMOUNT OF INSURANCE",
+        "REDUCTION SCHEDULE",
+        "ELIGIBILITY",
+        "TERMINATION AGE"
+      ]
+    },
+    "health_care": {
+      "headers": ["HEALTH CARE", "EXTENDED HEALTH CARE", "HEALTH BENEFITS"],
+      "subsections": [
+        "DEDUCTIBLE",
+        "REIMBURSEMENT",
+        "PRESCRIPTION DRUGS",
+        "PARAMEDICAL SERVICES"
+      ]
+    },
+    "dental_care": {
+      "headers": ["DENTAL CARE", "DENTAL BENEFITS", "DENTAL COVERAGE"],
+      "subsections": [
+        "BASIC SERVICES",
+        "MAJOR SERVICES",
+        "ORTHODONTIC",
+        "FEE GUIDE"
+      ]
+    }
+  },
+  "document_structure": {
+    "section_end_markers": [
+      "EXCLUSIONS AND LIMITATIONS",
+      "CONTACT INFORMATION"
+    ],
+    "common_patterns": {
+      "percentage": "\\d{1,3}%",
+      "currency": "\\$\\d+(?:,\\d{3})*(?:\\.\\d{2})?"
+    }
+  }
+}

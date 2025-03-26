@@ -6,7 +6,7 @@ services:
   # Private-GPT service for the Ollama CPU and GPU modes
   # This service builds from an external Dockerfile and runs the Ollama mode.
   private-gpt-openai:
-    image: ${PGPT_IMAGE:-zylonai/private-gpt}:${PGPT_TAG:-0.6.2}-openai
+    image: ${PGPT_IMAGE:-bridgewell-gpt}:${PGPT_TAG:-0.6.2}-openai
     user: root
     build:
       context: .
@@ -14,6 +14,9 @@ services:
     volumes:
       - ./local_data:/home/worker/app/local_data
       - ./private_gpt:/home/worker/app/private_gpt
+      - ./settings.yaml:/home/worker/app/settings.yaml
+      - ./settings-openai.yaml:/home/worker/app/settings-openai.yaml
+      - ./.env:/home/worker/app/.env
     ports:
       - "8001:8001"
     environment:
@@ -22,8 +25,9 @@ services:
       PGPT_MODE: openai
       PGPT_OPENAI_API_KEY: ${OPENAI_API_KEY}
       PGPT_EMBED_MODE: openai
-      PGPT_OPENAI_MODEL: gpt-3.5-turbo
+      PGPT_OPENAI_MODEL: gpt-4o
       PGPT_DEV_MODE: "true" # Enable development mode with auto-reload
+      LLAMA_CLOUD_API_KEY: ${LLAMA_CLOUD_API_KEY}
     profiles:
       - openai
 

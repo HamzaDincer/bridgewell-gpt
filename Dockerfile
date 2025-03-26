@@ -34,7 +34,7 @@ RUN chown worker /home/worker/app
 RUN mkdir local_data && chown worker local_data
 RUN mkdir models && chown worker models
 RUN mkdir -p /home/worker/app/local_data/private_gpt/templates
-COPY templates/benefit_comparison_template.xlsx /home/worker/app/local_data/private_gpt/templates/
+COPY local_data/private_gpt/templates/benefit_comparison_template.xlsx /home/worker/app/local_data/private_gpt/templates/
 
 COPY --chown=worker --from=dependencies /home/worker/app/.venv/ .venv
 COPY --chown=worker private_gpt/ private_gpt

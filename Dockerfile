@@ -34,14 +34,15 @@ RUN chown worker /home/worker/app
 RUN mkdir local_data && chown worker local_data
 RUN mkdir models && chown worker models
 RUN mkdir -p /home/worker/app/local_data/private_gpt/templates
-COPY templates/benefit_comparison_template.xlsx /home/worker/app/local_data/private_gpt/templates/
+RUN chmod -R 755 /root/.local/bin/poetry
+RUN ln -s /root/.local/bin/poetry /usr/local/bin/poetry
 
+COPY templates/benefit_comparison_template.xlsx /home/worker/app/local_data/private_gpt/templates/
 COPY --chown=worker --from=dependencies /home/worker/app/.venv/ .venv
 COPY --chown=worker private_gpt/ private_gpt
 COPY --chown=worker *.yaml .
 COPY --chown=worker scripts/ scripts
-RUN chmod -R 755 /root/.local/bin/poetry
-RUN ln -s /root/.local/bin/poetry /usr/local/bin/poetry
+
 
 USER worker
 ENTRYPOINT python -m private_gpt

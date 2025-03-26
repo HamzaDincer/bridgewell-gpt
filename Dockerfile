@@ -40,6 +40,8 @@ COPY --chown=worker --from=dependencies /home/worker/app/.venv/ .venv
 COPY --chown=worker private_gpt/ private_gpt
 COPY --chown=worker *.yaml .
 COPY --chown=worker scripts/ scripts
+RUN chmod -R 755 /root/.local/bin/poetry
+RUN ln -s /root/.local/bin/poetry /usr/local/bin/poetry
 
 USER worker
 ENTRYPOINT python -m private_gpt

@@ -15,10 +15,13 @@ from private_gpt.paths import local_data_path
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+# Get API key from environment variable
+LLAMA_CLOUD_API_KEY = os.getenv("LLAMA_CLOUD_API_KEY")
 
-LLAMA_CLOUD_API_KEY="llx-7faXFc1izYCOhnGnilBROIWTGHfBG50LFReXRAcsSbb8SBAU"
-
-logger.info(f"LLAMAPARSE_API_KEY: {LLAMA_CLOUD_API_KEY}")
+if not LLAMA_CLOUD_API_KEY:
+    logger.warning("LLAMA_CLOUD_API_KEY not found in environment variables")
+else:
+    logger.debug("LLAMA_CLOUD_API_KEY configured")
 
 llama_parser = LlamaParse(api_key=LLAMA_CLOUD_API_KEY, result_type="markdown")
 

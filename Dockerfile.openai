@@ -14,7 +14,7 @@ FROM base AS dependencies
 WORKDIR /home/worker/app
 COPY pyproject.toml poetry.lock ./
 
-ARG POETRY_EXTRAS="ui vector-stores-qdrant llms-openai embeddings-openai embeddings-huggingface rerank-sentence-transformers"
+ARG POETRY_EXTRAS="ui vector-stores-qdrant llms-openai embeddings-openai rerank-sentence-transformers"
 RUN poetry install --no-root --extras "${POETRY_EXTRAS}"
 
 FROM base AS app
@@ -33,6 +33,8 @@ WORKDIR /home/worker/app
 RUN chown worker /home/worker/app
 RUN mkdir local_data && chown worker local_data
 RUN mkdir models && chown worker models
+RUN mkdir -p /home/worker/app/local_data/private_gpt/templates
+COPY templates/benefit_comparison_template.xlsx /home/worker/app/local_data/private_gpt/templates/
 
 COPY --chown=worker --from=dependencies /home/worker/app/.venv/ .venv
 COPY --chown=worker private_gpt/ private_gpt

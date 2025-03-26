@@ -3,8 +3,7 @@ services:
     name: bridgewell-gpt
     env: python
     buildCommand: |
-      curl -sSL https://install.python-poetry.org | python3 -
-      poetry install --no-interaction --extras "ui openai"
+    poetry install --no-root --extras "ui vector-stores-qdrant llms-openai embeddings-openai rerank-sentence-transformers"
     startCommand: poetry run python -m private_gpt
     envVars:
       - key: PYTHON_VERSION
@@ -21,7 +20,7 @@ services:
         value: gpt-4o
       - key: PGPT_DEV_MODE
         value: "false"
-      - key: OPENAI_API_KEY
+      - key: PGPT_OPENAI_API_KEY
         sync: false
       - key: LLAMA_CLOUD_API_KEY
         sync: false

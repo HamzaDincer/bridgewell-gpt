@@ -1,21 +1,21 @@
 FROM python:3.11.6-slim-bookworm AS base
 
-# Install Poetry
-RUN pip install pipx
-RUN python3 -m pipx ensurepath
-RUN pipx install poetry==1.8.3
-ENV PATH="/root/.local/bin:$PATH"
-ENV PATH=".venv/bin/:$PATH"
+# Install dependencies
+RUN apt-get update && \
+    apt-get install -y sudo && \
+    rm -rf /var/lib/apt/lists/*
 
 # Enable in-project virtual environment
-ENV POETRY_VIRTUALENVS_IN_PROJECT=true
+ENV VIRTUAL_ENV=/opt/venv
+RUN python -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 FROM base AS dependencies
 WORKDIR /home/worker/app
 COPY pyproject.toml poetry.lock ./
 
-ARG POETRY_EXTRAS="ui vector-stores-qdrant llms-openai embeddings-openai rerank-sentence-transformers"
-RUN poetry install --no-root --extras "${POETRY_EXTRAS}"
+# Install dependencies using pip
+RUN pip install --no-cache-dir -r <(poetry export --format=requirements.txt --without-hashes)
 
 FROM base AS app
 ENV PYTHONUNBUFFERED=1
@@ -25,12 +25,10 @@ ENV PYTHONPATH="$PYTHONPATH:/home/worker/app/bridgewell_gpt/"
 ENV PGPT_PROFILES=openai
 EXPOSE 8080
 
-# Create a non-root user and add sudo privileges
+# Create a non-root user
 ARG UID=100
 ARG GID=65534
-RUN apt-get update && \
-    apt-get install -y sudo && \
-    adduser --system --gid ${GID} --uid ${UID} --home /home/worker worker && \
+RUN adduser --system --gid ${GID} --uid ${UID} --home /home/worker worker && \
     echo "worker ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     chmod 0440 /etc/sudoers
 
@@ -42,11 +40,10 @@ RUN mkdir -p /home/worker/app/local_data/bridgewell_gpt/templates
 
 # Copy files with correct ownership
 COPY templates/benefit_comparison_template.xlsx /home/worker/app/local_data/bridgewell_gpt/templates/
-COPY --chown=worker --from=dependencies /home/worker/app/.venv/ .venv
+COPY --chown=worker --from=dependencies /opt/venv/ /opt/venv/
 COPY --chown=worker bridgewell_gpt/ bridgewell_gpt
 COPY --chown=worker *.yaml .
 COPY --chown=worker scripts/ scripts
 
-# Switch to worker user only at the end
 USER worker
 ENTRYPOINT ["python", "-m", "bridgewell_gpt"]

@@ -20,7 +20,7 @@ data:
   local_ingestion:
     enabled: ${LOCAL_INGESTION_ENABLED:false}
     allow_ingest_from: ["*"]
-  local_data_folder: local_data/private_gpt
+  local_data_folder: local_data/bridgewell_gpt
 
 ui:
   enabled: true
@@ -104,12 +104,12 @@ nodestore:
   database: simple
 
 milvus:
-  uri: local_data/private_gpt/milvus/milvus_local.db
+  uri: local_data/bridgewell_gpt/milvus/milvus_local.db
   collection_name: milvus_db
   overwrite: false
 
 qdrant:
-  path: local_data/private_gpt/qdrant
+  path: local_data/bridgewell_gpt/qdrant
   overwrite: true
 
 postgres:
@@ -118,7 +118,7 @@ postgres:
   database: postgres
   user: postgres
   password: postgres
-  schema_name: private_gpt
+  schema_name: bridgewell_gpt
 
 sagemaker:
   llm_endpoint_name: huggingface-pytorch-tgi-inference-2023-09-25-19-53-32-140

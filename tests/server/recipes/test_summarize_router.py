@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from private_gpt.server.recipes.summarize.summarize_router import (
+from bridgewell_gpt.server.recipes.summarize.summarize_router import (
     SummarizeBody,
     SummarizeResponse,
 )

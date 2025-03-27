@@ -3,8 +3,8 @@ import os
 import shutil
 from typing import Any, ClassVar
 
-from private_gpt.paths import local_data_path
-from private_gpt.settings.settings import settings
+from bridgewell_gpt.paths import local_data_path
+from bridgewell_gpt.settings.settings import settings
 
 
 def wipe_file(file: str) -> None:

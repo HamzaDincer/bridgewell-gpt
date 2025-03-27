@@ -1,4 +1,4 @@
-from private_gpt.settings.settings import Settings, settings
+from bridgewell_gpt.settings.settings import Settings, settings
 from tests.fixtures.mock_injector import MockInjector
 
 

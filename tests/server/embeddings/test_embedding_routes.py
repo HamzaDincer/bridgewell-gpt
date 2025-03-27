@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from private_gpt.server.embeddings.embeddings_router import (
+from bridgewell_gpt.server.embeddings.embeddings_router import (
     EmbeddingsBody,
     EmbeddingsResponse,
 )

@@ -1,7 +1,7 @@
 import pytest
 from llama_index.core.llms import ChatMessage, MessageRole
 
-from private_gpt.components.llm.prompt_helper import (
+from bridgewell_gpt.components.llm.prompt_helper import (
     ChatMLPromptStyle,
     DefaultPromptStyle,
     Llama2PromptStyle,

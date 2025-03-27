@@ -4,10 +4,10 @@ import argparse
 import logging
 from pathlib import Path
 
-from private_gpt.di import global_injector
-from private_gpt.server.ingest.ingest_service import IngestService
-from private_gpt.server.ingest.ingest_watcher import IngestWatcher
-from private_gpt.settings.settings import Settings
+from bridgewell_gpt.di import global_injector
+from bridgewell_gpt.server.ingest.ingest_service import IngestService
+from bridgewell_gpt.server.ingest.ingest_watcher import IngestWatcher
+from bridgewell_gpt.settings.settings import Settings
 
 logger = logging.getLogger(__name__)
 

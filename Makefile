@@ -9,20 +9,20 @@ test:
 	PYTHONPATH=. poetry run pytest tests
 
 test-coverage:
-	PYTHONPATH=. poetry run pytest tests --cov private_gpt --cov-report term --cov-report=html --cov-report xml --junit-xml=tests-results.xml
+	PYTHONPATH=. poetry run pytest tests --cov bridgewell_gpt --cov-report term --cov-report=html --cov-report xml --junit-xml=tests-results.xml
 
 black:
 	poetry run black . --check
 
 ruff:
-	poetry run ruff check private_gpt tests
+	poetry run ruff check bridgewell_gpt tests
 
 format:
 	poetry run black .
-	poetry run ruff check private_gpt tests --fix
+	poetry run ruff check bridgewell_gpt tests --fix
 
 mypy:
-	poetry run mypy private_gpt
+	poetry run mypy bridgewell_gpt
 
 check:
 	make format
@@ -33,20 +33,20 @@ check:
 ########################################################################################################################
 
 run:
-	poetry run python -m private_gpt
+	poetry run python -m bridgewell_gpt
 
 dev-windows:
-	(set PGPT_PROFILES=local & poetry run python -m uvicorn private_gpt.main:app --reload --port 8001)
+	(set PGPT_PROFILES=local & poetry run python -m uvicorn bridgewell_gpt.main:app --reload --port 8001)
 
 dev:
-	PYTHONUNBUFFERED=1 PGPT_PROFILES=local poetry run python -m uvicorn private_gpt.main:app --reload --port 8001
+	PYTHONUNBUFFERED=1 PGPT_PROFILES=local poetry run python -m uvicorn bridgewell_gpt.main:app --reload --port 8001
 
 ########################################################################################################################
 # Misc
 ########################################################################################################################
 
 api-docs:
-	PGPT_PROFILES=mock poetry run python scripts/extract_openapi.py private_gpt.main:app --out fern/openapi/openapi.json
+	PGPT_PROFILES=mock poetry run python scripts/extract_openapi.py bridgewell_gpt.main:app --out fern/openapi/openapi.json
 
 ingest:
 	@poetry run python scripts/ingest_folder.py $(call args)

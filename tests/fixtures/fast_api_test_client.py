@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from private_gpt.launcher import create_app
+from bridgewell_gpt.launcher import create_app
 from tests.fixtures.mock_injector import MockInjector
 
 

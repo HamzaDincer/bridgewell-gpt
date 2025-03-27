@@ -31,9 +31,9 @@ RUN adduser --system --gid ${GID} --uid ${UID} --home /home/worker worker
 
 WORKDIR /home/worker/app
 RUN chown worker /home/worker/app
-RUN mkdir local_data && chown worker local_data
-RUN mkdir models && chown worker models
-RUN mkdir -p /home/worker/app/local_data/bridgewell_gpt/templates
+RUN mkdir -p local_data models /home/worker/app/local_data/bridgewell_gpt/templates /home/worker/app/local_data/bridgewell_gpt/original_files /home/worker/app/local_data/bridgewell_gpt/comparisons /home/worker/app/local_data/bridgewell_gpt/extracted_pages && \
+    chown -R worker:${GID} /home/worker/app/local_data
+
 COPY templates/benefit_comparison_template.xlsx /home/worker/app/local_data/bridgewell_gpt/templates/
 
 COPY --chown=worker --from=dependencies /home/worker/app/.venv/ .venv

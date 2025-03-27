@@ -1,21 +1,21 @@
 FROM python:3.11.6-slim-bookworm AS base
 
-# Install dependencies
-RUN apt-get update && \
-    apt-get install -y sudo && \
-    rm -rf /var/lib/apt/lists/*
+# Install Poetry
+RUN pip install pipx
+RUN python3 -m pipx ensurepath
+RUN pipx install poetry==1.8.3
+ENV PATH="/root/.local/bin:$PATH"
+ENV PATH=".venv/bin/:$PATH"
 
 # Enable in-project virtual environment
-ENV VIRTUAL_ENV=/opt/venv
-RUN python -m venv $VIRTUAL_ENV
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+ENV POETRY_VIRTUALENVS_IN_PROJECT=true
 
 FROM base AS dependencies
 WORKDIR /home/worker/app
 COPY pyproject.toml poetry.lock ./
 
-# Install dependencies using pip
-RUN pip install --no-cache-dir -r <(poetry export --format=requirements.txt --without-hashes)
+ARG POETRY_EXTRAS="ui vector-stores-qdrant llms-openai embeddings-openai rerank-sentence-transformers"
+RUN poetry install --no-root --extras "${POETRY_EXTRAS}"
 
 FROM base AS app
 ENV PYTHONUNBUFFERED=1
@@ -28,9 +28,15 @@ EXPOSE 8080
 # Create a non-root user
 ARG UID=100
 ARG GID=65534
-RUN adduser --system --gid ${GID} --uid ${UID} --home /home/worker worker && \
-    echo "worker ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
-    chmod 0440 /etc/sudoers
+RUN adduser --system --gid ${GID} --uid ${UID} --home /home/worker worker
+
+# Fix Poetry permissions
+RUN chmod -R 755 /root/.local/bin/poetry && \
+    chmod -R 755 /root/.local && \
+    mkdir -p /usr/local/bin && \
+    cp /root/.local/bin/poetry /usr/local/bin/poetry && \
+    chmod 755 /usr/local/bin/poetry && \
+    chown -R worker:${GID} /usr/local/bin/poetry
 
 WORKDIR /home/worker/app
 RUN chown worker /home/worker/app
@@ -40,7 +46,7 @@ RUN mkdir -p /home/worker/app/local_data/bridgewell_gpt/templates
 
 # Copy files with correct ownership
 COPY templates/benefit_comparison_template.xlsx /home/worker/app/local_data/bridgewell_gpt/templates/
-COPY --chown=worker --from=dependencies /opt/venv/ /opt/venv/
+COPY --chown=worker --from=dependencies /home/worker/app/.venv/ .venv
 COPY --chown=worker bridgewell_gpt/ bridgewell_gpt
 COPY --chown=worker *.yaml .
 COPY --chown=worker scripts/ scripts

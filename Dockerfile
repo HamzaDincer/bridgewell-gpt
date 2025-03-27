@@ -1,10 +1,11 @@
 FROM python:3.11.6-slim-bookworm AS base
 
 # Install Poetry
-RUN pip install pipx
-RUN python3 -m pipx ensurepath
-RUN pipx install poetry==1.8.3
-ENV PATH="/root/.local/bin:$PATH"
+RUN pip install pipx && \
+    pipx install poetry==1.8.3 && \
+    ln -s /root/.local/bin/poetry /usr/local/bin/poetry && \
+    chmod +x /root/.local/bin/poetry
+ENV PATH="/usr/local/bin:$PATH"
 ENV PATH=".venv/bin/:$PATH"
 
 # Enable in-project virtual environment
@@ -29,14 +30,6 @@ EXPOSE 8080
 ARG UID=100
 ARG GID=65534
 RUN adduser --system --gid ${GID} --uid ${UID} --home /home/worker worker
-
-# Fix Poetry permissions
-RUN chmod -R 755 /root/.local/bin/poetry && \
-    chmod -R 755 /root/.local && \
-    mkdir -p /usr/local/bin && \
-    cp /root/.local/bin/poetry /usr/local/bin/poetry && \
-    chmod 755 /usr/local/bin/poetry && \
-    chown -R worker:${GID} /usr/local/bin/poetry
 
 WORKDIR /home/worker/app
 RUN chown worker /home/worker/app

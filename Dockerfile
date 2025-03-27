@@ -1,10 +1,10 @@
 FROM python:3.11.6-slim-bookworm AS base
 
 # Install Poetry
-RUN pip install pipx && \
-    pipx install poetry==1.8.3 && \
-    ln -s /root/.local/bin/poetry /usr/local/bin/poetry && \
-    chmod +x /root/.local/bin/poetry
+RUN rm -f /usr/local/bin/poetry && \
+    curl -sSL https://install.python-poetry.org | python3 - && \
+    mv /root/.local/bin/poetry /usr/local/bin/poetry && \
+    chmod +x /usr/local/bin/poetry
 ENV PATH="/usr/local/bin:$PATH"
 ENV PATH=".venv/bin/:$PATH"
 

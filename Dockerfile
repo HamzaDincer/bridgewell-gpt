@@ -1,5 +1,11 @@
 FROM python:3.11.6-slim-bookworm AS base
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    build-essential \
+    python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install Poetry
 RUN rm -f /usr/local/bin/poetry && \
     curl -sSL https://install.python-poetry.org | python3 - && \

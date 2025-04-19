@@ -34,6 +34,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DocumentTypeDialog } from "@/components/ui/DocumentTypeDialog";
 
 // Renamed function to DashboardComponent to avoid conflict if needed, but keeping Dashboard for now
 export default function Dashboard() {
@@ -47,6 +48,7 @@ export default function Dashboard() {
       setupRequired: true,
     },
   ]);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -176,7 +178,10 @@ export default function Dashboard() {
                     className="w-[300px] pl-8 bg-white"
                   />
                 </div>
-                <Button className="bg-indigo-500 hover:bg-indigo-600">
+                <Button
+                  className="bg-indigo-500 hover:bg-indigo-600"
+                  onClick={() => setIsDialogOpen(true)}
+                >
                   <span className="mr-1">+</span> Add Document Type
                 </Button>
               </div>
@@ -255,6 +260,10 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
+          <DocumentTypeDialog
+            open={isDialogOpen}
+            onOpenChange={setIsDialogOpen}
+          />
         </main>
       </div>
     </div>

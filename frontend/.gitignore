@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Allow tracking the src/lib directory, even if ignored elsewhere
+!src/lib/

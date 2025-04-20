@@ -6,7 +6,7 @@ from pathlib import Path
 import logging
 import difflib
 from llama_index.core.llms import ChatMessage, MessageRole
-from llama_extract import LlamaExtract
+from llama_cloud_services import LlamaExtract
 import os
 import shutil
 from PyPDF2 import PdfReader, PdfWriter
@@ -24,12 +24,7 @@ from bridgewell_gpt.server.extraction.insurance_schema import InsuranceSummary
 # Load environment variables
 load_dotenv()
 
-# Get API key from environment variable
-LLAMA_CLOUD_API_KEY = os.getenv('LLAMA_CLOUD_API_KEY')
-if not LLAMA_CLOUD_API_KEY:
-    raise ValueError("LLAMA_CLOUD_API_KEY environment variable is not set")
-
-extractor = LlamaExtract(api_key=LLAMA_CLOUD_API_KEY)
+extractor = LlamaExtract()
 
 logger = logging.getLogger(__name__)
 

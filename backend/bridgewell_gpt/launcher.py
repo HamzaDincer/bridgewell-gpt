@@ -18,6 +18,7 @@ from bridgewell_gpt.server.health.health_router import health_router
 from bridgewell_gpt.server.ingest.ingest_router import ingest_router
 from bridgewell_gpt.server.recipes.summarize.summarize_router import summarize_router
 from bridgewell_gpt.server.extraction.extraction_router import extraction_router
+from bridgewell_gpt.server.document_types.document_type_router import document_type_router
 from bridgewell_gpt.settings.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,14 @@ def create_app(root_injector: Injector) -> FastAPI:
     app.include_router(embeddings_router)
     app.include_router(health_router)
     app.include_router(excel_router)
+    
+    logger.info("Attempting to include extraction_router")
     app.include_router(extraction_router)
+    logger.info("Successfully included extraction_router")
+    
+    logger.info("Attempting to include document_type_router")
+    app.include_router(document_type_router)
+    logger.info("Successfully included document_type_router")
 
     # Add LlamaIndex simple observability
     global_handler = create_global_handler("simple")

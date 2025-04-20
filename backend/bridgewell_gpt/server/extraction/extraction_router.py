@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from pydantic import BaseModel, Field
 import json
 import logging
-from llama_extract import LlamaExtract
+from llama_cloud_services import LlamaExtract
 from dotenv import load_dotenv
 import os
 import tempfile
@@ -24,13 +24,9 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
-# Get API key from environment variable
-LLAMA_CLOUD_API_KEY = os.getenv('LLAMA_CLOUD_API_KEY')
-if not LLAMA_CLOUD_API_KEY:
-    raise ValueError("LLAMA_CLOUD_API_KEY environment variable is not set")
 
 # Initialize LlamaExtract client
-extractor = LlamaExtract(api_key=LLAMA_CLOUD_API_KEY)
+extractor = LlamaExtract()
 
 class ExtractPagesRequest(BaseModel):
     page_numbers: List[int] = Field(description="List of page numbers to extract (1-based indexing)")

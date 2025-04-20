@@ -12,23 +12,20 @@ import { Button } from "@/components/ui/button";
 interface DocumentTypeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSelectType: (typeName: string) => void;
 }
 
 const documentTypes = [
-  "Income",
-  "Procurement",
-  "Energy",
-  "Identification",
   "Insurance",
   "Tax Forms",
   "Other",
-  "USA Lending",
   // Add more types as needed
 ];
 
 export function DocumentTypeDialog({
   open,
   onOpenChange,
+  onSelectType,
 }: DocumentTypeDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -47,8 +44,9 @@ export function DocumentTypeDialog({
               variant="outline"
               className="justify-start h-auto py-3"
               onClick={() => {
-                console.log(`Selected: ${docType}`); // Placeholder action
-                onOpenChange(false); // Close dialog on selection
+                // console.log(`Selected: ${docType}`); // Keep console log for debugging if needed
+                onSelectType(docType); // Call the passed handler
+                // onOpenChange(false); // Keep dialog open until parent handles it
               }}
             >
               {docType}

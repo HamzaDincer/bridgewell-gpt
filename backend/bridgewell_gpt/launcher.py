@@ -13,7 +13,7 @@ from bridgewell_gpt.server.chat.chat_router import chat_router
 from bridgewell_gpt.server.chunks.chunks_router import chunks_router
 from bridgewell_gpt.server.completions.completions_router import completions_router
 from bridgewell_gpt.server.embeddings.embeddings_router import embeddings_router
-from bridgewell_gpt.server.excel.excel_router import excel_router
+
 from bridgewell_gpt.server.health.health_router import health_router
 from bridgewell_gpt.server.ingest.ingest_router import ingest_router
 from bridgewell_gpt.server.recipes.summarize.summarize_router import summarize_router
@@ -39,7 +39,6 @@ def create_app(root_injector: Injector) -> FastAPI:
     app.include_router(summarize_router)
     app.include_router(embeddings_router)
     app.include_router(health_router)
-    app.include_router(excel_router)
     
     logger.info("Attempting to include extraction_router")
     app.include_router(extraction_router)

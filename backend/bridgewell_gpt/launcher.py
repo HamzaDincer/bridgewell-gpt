@@ -1,9 +1,11 @@
 """FastAPI app creation, logger configuration and main API routes."""
 
 import logging
+import os
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from injector import Injector
 from llama_index.core.callbacks import CallbackManager
 from llama_index.core.callbacks.global_handlers import create_global_handler
@@ -47,6 +49,20 @@ def create_app(root_injector: Injector) -> FastAPI:
     logger.info("Attempting to include document_type_router")
     app.include_router(document_type_router)
     logger.info("Successfully included document_type_router")
+
+    # Expose original_files as static files
+    original_files_path = os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__),
+            "../local_data/bridgewell_gpt/original_files"
+        )
+    )
+    os.makedirs(original_files_path, exist_ok=True)
+    app.mount(
+        "/original_files",
+        StaticFiles(directory=original_files_path),
+        name="original_files"
+    )
 
     # Add LlamaIndex simple observability
     global_handler = create_global_handler("simple")

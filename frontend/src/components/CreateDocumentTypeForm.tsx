@@ -17,7 +17,7 @@ import { useDropzone, FileRejection } from "react-dropzone";
 import { cn } from "@/lib/utils";
 
 interface CreateDocumentTypeFormProps {
-  initialDocumentTypeName: string;
+  initialDocumentTypeName: string | null;
   onCreate: (typeName: string, file: File | null, docId?: string) => void;
   onNavigateBack: () => void;
 }
@@ -28,7 +28,7 @@ export function CreateDocumentTypeForm({
   onNavigateBack,
 }: CreateDocumentTypeFormProps) {
   const [documentTypeName, setDocumentTypeName] = useState(
-    initialDocumentTypeName,
+    initialDocumentTypeName || "",
   );
   const [acceptedFile, setAcceptedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);

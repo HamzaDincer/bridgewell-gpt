@@ -1,24 +1,19 @@
-from typing import Dict, Any, Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
-from pydantic import BaseModel, Field
-import json
-import logging
+from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from llama_cloud_services import LlamaExtract
+from typing import Dict, Optional, List
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
-import os
-import tempfile
 from pathlib import Path
-from injector import inject
+import logging
+import json
 
 from bridgewell_gpt.server.extraction.extraction_service import ExtractionService
 from bridgewell_gpt.server.extraction.insurance_schema import InsuranceSummary
 from bridgewell_gpt.server.utils.auth import authenticated
-from bridgewell_gpt.server.ingest.ingest_service import IngestService
 
 extraction_router = APIRouter(prefix="/v1", dependencies=[Depends(authenticated)])
 
 logger = logging.getLogger(__name__)
-
 
 
 # Load environment variables

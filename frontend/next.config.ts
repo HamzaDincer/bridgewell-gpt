@@ -5,10 +5,15 @@ import type { Configuration as WebpackConfiguration } from "webpack";
 const nextConfig: NextConfig = {
   /* config options here */
 
-  webpack: (config: WebpackConfiguration, { isServer }) => {
-    config.plugins = config.plugins || [];
+  webpack: (config: WebpackConfiguration) => {
+    if (config.resolve) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        canvas: false,
+      };
+    }
 
-    if (!isServer) {
+    if (config.plugins) {
       config.plugins.push(new MiniCssExtractPlugin());
     }
 

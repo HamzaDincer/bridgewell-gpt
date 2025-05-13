@@ -3,16 +3,16 @@ import logging
 from pathlib import Path
 from typing import List
 from injector import singleton
+from datetime import datetime
 
-from bridgewell_gpt.paths import local_data_path # Import the variable directly
-from .document_type_models import DocumentTypeResponse, DocumentTypeCreate
+from bridgewell_gpt.paths import local_data_path
+from .document_type_models import DocumentTypeResponse, DocumentTypeCreate, DocumentCreate, DocumentResponse
 
 logger = logging.getLogger(__name__)
 
 @singleton
 class DocumentTypeService:
     def __init__(self):
-        # self._data_path = get_local_data_path() / "document_types.json" # Use variable
         self._data_path = local_data_path / "document_types.json"
         self._ensure_data_file()
         logger.info(f"DocumentTypeService initialized, using data file: {self._data_path}")
@@ -27,7 +27,6 @@ class DocumentTypeService:
                 logger.info(f"Created empty document types data file: {self._data_path}")
         except Exception as e:
             logger.error(f"Error ensuring data file {self._data_path}: {e}", exc_info=True)
-            # If we can't create the file, we might want to raise or handle differently
             raise
 
     def _load_data(self) -> List[dict]:
@@ -54,7 +53,6 @@ class DocumentTypeService:
                 json.dump(data, f, indent=2)
         except Exception as e:
             logger.error(f"Error saving data to {self._data_path}: {e}", exc_info=True)
-            # Consider how to handle save errors - maybe raise?
             raise
 
     def get_document_types(self) -> List[DocumentTypeResponse]:
@@ -71,13 +69,10 @@ class DocumentTypeService:
         
         # Check for existing title
         if any(item['title'].lower() == type_create.title.lower() for item in data):
-            # Or raise HTTPException(status_code=400, detail="Title already exists")
             logger.warning(f"Document type with title '{type_create.title}' already exists.")
-            # Find and return the existing one or handle as needed
             existing = next((item for item in data if item['title'].lower() == type_create.title.lower()), None)
             if existing:
                  return DocumentTypeResponse(**existing)
-            # This case shouldn't happen if the check passed, but fallback:
             raise ValueError(f"Duplicate title error for '{type_create.title}'") 
 
         # Determine the next ID
@@ -90,11 +85,66 @@ class DocumentTypeService:
             "review_pending": 0,
             "approved": 0,
             "setup_required": True,
+            "documents": []
         }
         data.append(new_type_data)
         self._save_data(data)
         logger.info(f"Successfully created document type ID {new_id} with title '{type_create.title}'")
         return DocumentTypeResponse(**new_type_data)
+
+    def add_document(self, type_id: int, document: DocumentCreate) -> DocumentTypeResponse:
+        """Add a document to a document type."""
+        logger.info(f"DocumentTypeService: Adding document '{document.doc_name}' to type {type_id}")
+        data = self._load_data()
+        
+        # Find the document type
+        type_data = next((item for item in data if item['id'] == type_id), None)
+        if not type_data:
+            raise ValueError(f"Document type with ID {type_id} not found")
+
+        # Create new document entry
+        new_doc = {
+            "id": document.doc_id,
+            "name": document.doc_name,
+            "status": "pending",
+            "date_added": datetime.now().isoformat()
+        }
+
+        # Add document to type
+        type_data['documents'].append(new_doc)
+        type_data['uploaded'] = len(type_data['documents'])
+        
+        self._save_data(data)
+        logger.info(f"Successfully added document to type {type_id}")
+        return DocumentTypeResponse(**type_data)
+
+    def get_documents(self, type_id: int) -> List[DocumentResponse]:
+        """Get all documents for a document type."""
+        logger.info(f"DocumentTypeService: Getting documents for type {type_id}")
+        data = self._load_data()
+        
+        # Find the document type
+        type_data = next((item for item in data if item['id'] == type_id), None)
+        if not type_data:
+            raise ValueError(f"Document type with ID {type_id} not found")
+
+        # Convert document dicts to DocumentResponse objects
+        return [DocumentResponse(**doc) for doc in type_data.get('documents', [])]
+
+    def update_document_type_counts(self, type_id: int, uploaded: int = None, pending: int = None, approved: int = None) -> DocumentTypeResponse:
+        """Update the counts for a document type."""
+        data = self._load_data()
+        for item in data:
+            if item['id'] == type_id:
+                if uploaded is not None:
+                    item['uploaded'] = uploaded
+                if pending is not None:
+                    item['review_pending'] = pending
+                if approved is not None:
+                    item['approved'] = approved
+                self._save_data(data)
+                return DocumentTypeResponse(**item)
+        raise ValueError(f"Document type with ID {type_id} not found")
 
     # Potential future methods:
     # def update_counts(self, type_id: int, uploaded: int, pending: int, approved: int):

@@ -23,6 +23,7 @@ import {
   SkipForward,
   CheckCheck,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 // Placeholder data structure - replace with actual data shape later
 interface Document {
@@ -39,13 +40,23 @@ interface DocumentListViewProps {
   documentTypeName: string;
   documents: Document[];
   onBack: () => void; // Function to go back (likely to main dashboard)
+  isLoading?: boolean; // Optional: for loading state of the list
+  error?: string | null; // Optional: for error state of the list
 }
 
 export function DocumentListView({
   documentTypeName,
   documents,
   onBack,
+  isLoading,
+  error,
 }: DocumentListViewProps) {
+  const router = useRouter();
+  // TODO: Use isLoading and error states to render UI accordingly if needed
+  // For example:
+  // if (isLoading) return <p>Loading documents...</p>;
+  // if (error) return <p>Error loading documents: {error}</p>;
+
   return (
     <div className="space-y-4">
       {/* Header section */}
@@ -169,7 +180,12 @@ export function DocumentListView({
           </TableHeader>
           <TableBody>
             {documents.map((doc) => (
-              <TableRow key={doc.id}>
+              <TableRow
+                key={doc.id}
+                className="cursor-pointer hover:bg-indigo-50 transition-colors"
+                style={{ textDecoration: "none" }}
+                onClick={() => router.push(`/documents/${doc.id}`)}
+              >
                 <TableCell>
                   <Checkbox />
                 </TableCell>

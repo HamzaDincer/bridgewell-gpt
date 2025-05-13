@@ -11,37 +11,13 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url,
 ).toString();
 
-interface Annotation {
-  id: string;
-  content: string;
-  position: { x: number; y: number };
-  type: "bounding_box";
-  color: string;
-  pageNumber: number;
-  width: number;
-  height: number;
-}
-
-type AnnotationsByPage = {
-  [key: string]: Annotation[];
-};
-
-// Dummy annotations data with bounding boxes
-// We will replace the usage of this with our new hardcoded data
-// const dummyAnnotations: AnnotationsByPage = {
-//  "8": [
-//    {
-//      id: "1",
-//      content: "Bounding box annotation",
-//      position: { x: 0.08875, y: 0.2798529411764706 },
-//      type: "bounding_box",
-//      color: "#2196f3",
-//      pageNumber: 1, // This was pageNumber: 1, but dummy data was for "8", let's assume it was a typo
-//      width: 0.37999999999999995,
-//      height: 0.0558088235294117,
-//    },
-//  ],
-// };
+// Import types from @/types
+import type {
+  Annotation,
+  AnnotationsByPage,
+  // ExtractionSection,
+  ExtractionData,
+} from "@/types";
 
 // User provided hardcoded extraction data
 const hardcodedExtractionData = {
@@ -206,10 +182,6 @@ const insuranceExtractionSchema: Record<string, Record<string, string>> = {
     virtual_healthcare_services: "",
   },
 };
-
-type ExtractionSection = Record<string, string>;
-
-type ExtractionData = Record<string, ExtractionSection>;
 
 function mergeExtractionWithSchema(
   schema: ExtractionData,

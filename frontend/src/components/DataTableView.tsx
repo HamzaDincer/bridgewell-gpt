@@ -2,9 +2,8 @@
 
 import React from "react";
 
-interface DataTableViewProps {
-  documentTypeName: string | null;
-}
+// Import DataTableViewProps from @/types
+import type { DataTableViewProps } from "@/types";
 
 export function DataTableView({ documentTypeName }: DataTableViewProps) {
   return (

@@ -16,11 +16,8 @@ import {
 import { useDropzone, FileRejection } from "react-dropzone";
 import { cn } from "@/lib/utils";
 
-interface CreateDocumentTypeFormProps {
-  initialDocumentTypeName: string | null;
-  onCreate: (typeName: string, file: File | null, docId?: string) => void;
-  onNavigateBack: () => void;
-}
+// Import CreateDocumentTypeFormProps from @/types
+import type { CreateDocumentTypeFormProps } from "@/types";
 
 export function CreateDocumentTypeForm({
   initialDocumentTypeName,

@@ -22,27 +22,12 @@ import {
   FileText,
   SkipForward,
   CheckCheck,
+  Loader2, // Added Loader2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-// Placeholder data structure - replace with actual data shape later
-interface Document {
-  id: string;
-  name: string;
-  status: string;
-  uploadedBy: string;
-  uploadType: string; // e.g., Direct Upload
-  dateModified: string;
-  dateAdded: string;
-}
-
-interface DocumentListViewProps {
-  documentTypeName: string;
-  documents: Document[];
-  onBack: () => void; // Function to go back (likely to main dashboard)
-  isLoading?: boolean; // Optional: for loading state of the list
-  error?: string | null; // Optional: for error state of the list
-}
+// Import Document and DocumentListViewProps from @/types
+import type { DocumentListViewProps } from "@/types";
 
 export function DocumentListView({
   documentTypeName,
@@ -52,10 +37,42 @@ export function DocumentListView({
   error,
 }: DocumentListViewProps) {
   const router = useRouter();
-  // TODO: Use isLoading and error states to render UI accordingly if needed
-  // For example:
-  // if (isLoading) return <p>Loading documents...</p>;
-  // if (error) return <p>Error loading documents: {error}</p>;
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+        <Loader2 className="h-10 w-10 animate-spin mb-4 text-indigo-600" />
+        <p className="text-lg">Loading documents...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-destructive">
+        <FileText className="h-10 w-10 mb-4" /> {/* Or some other error icon */}
+        <p className="text-lg font-semibold">Error loading documents</p>
+        <p className="text-sm">{error}</p>
+        <Button onClick={onBack} variant="outline" className="mt-4">
+          Go Back
+        </Button>
+      </div>
+    );
+  }
+
+  if (documents.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+        <FileText className="h-10 w-10 mb-4" />
+        <p className="text-lg">No documents found.</p>
+        <p className="text-sm mb-4">Upload a document to get started.</p>
+        {/* Consider adding an Upload button here or direct to one if appropriate */}
+        <Button onClick={onBack} variant="outline">
+          Back to Document Type
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

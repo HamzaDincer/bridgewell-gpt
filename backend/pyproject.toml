@@ -18,13 +18,14 @@ cryptography = "^3.1"
 # PDF Processing
 PyPDF2 = "^3.0.0"
 # LlamaParse and dependencies
-llama-cloud = "0.1.11"
-llama-cloud-services = "0.6.0"
-llama-extract = "0.1.1"
+llama-cloud = "^0.1.11"
+llama-cloud-services = "0.6.23"
 # Excel support
 openpyxl = "^3.1.2"
+# Pydantic (pinned for Gradio compatibility)
+pydantic = "2.10.6"
 # LlamaIndex core libs
-llama-index-core = ">=0.11.2,<0.12.0"
+llama-index-core = "^0.12.0"
 llama-index-readers-file = "*"
 # Optional LlamaIndex integration libs
 llama-index-llms-llama-cpp = {version = "*", optional = true}

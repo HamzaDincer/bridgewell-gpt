@@ -27,6 +27,8 @@ pydantic = "2.10.6"
 # LlamaIndex core libs
 llama-index-core = "^0.12.0"
 llama-index-readers-file = "*"
+# Landing AI client
+agentic-doc = "*"
 # Optional LlamaIndex integration libs
 llama-index-llms-llama-cpp = {version = "*", optional = true}
 llama-index-llms-openai = {version ="*", optional = true}

@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Inter } from "next/font/google";
+import { UploadProvider } from "@/contexts/UploadContext";
+import { UploadProgressContainer } from "@/components/UploadProgressContainer";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "DocManager",
@@ -13,7 +18,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className={inter.className}>
+        <UploadProvider>
+          {children}
+          <UploadProgressContainer />
+        </UploadProvider>
+      </body>
     </html>
   );
 }

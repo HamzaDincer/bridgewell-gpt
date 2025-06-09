@@ -8,6 +8,7 @@ import threading
 from pathlib import Path
 from queue import Queue
 from typing import Any
+import uuid
 
 from llama_index.core.data_structs import IndexDict
 from llama_index.core.embeddings.utils import EmbedType
@@ -126,6 +127,16 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
         logger.info(
             "Transformed file=%s into count=%s documents", file_name, len(documents)
         )
+        
+        # Generate document IDs before extraction
+        for doc in documents:
+            if not doc.doc_id:
+                doc.doc_id = str(uuid.uuid4())
+            if not doc.metadata:
+                doc.metadata = {}
+            doc.metadata["file_name"] = file_name
+            doc.metadata["doc_id"] = doc.doc_id
+
         # Extract the document using the injected component
         extraction = self.extraction_component.extract_document(documents, "Benefit", file_name)
         logger.info(f"Extraction: {extraction}")
@@ -139,8 +150,26 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                 doc.metadata["extraction_id"] = extraction.get("extraction_id")
                 doc.metadata["document_type"] = extraction.get("document_type")
 
-        logger.debug("Saving the documents in the index and doc store")
-        return self._save_docs(documents)
+        # Start background task for embedding and indexing
+        self._background_save_docs(documents)
+
+        # Return documents with IDs immediately
+        return documents
+
+    def _background_save_docs(self, documents: list[Document]) -> None:
+        """Save documents to index in the background."""
+        def save_task():
+            logger.debug("Saving the documents in the index and doc store")
+            with self._index_thread_lock:
+                for document in documents:
+                    self._index.insert(document)
+                logger.debug("Persisting the index and nodes")
+                self._save_index()
+                logger.debug("Persisted the index and nodes")
+
+        import threading
+        thread = threading.Thread(target=save_task)
+        thread.start()
 
     def bulk_ingest(self, files: list[tuple[str, Path]]) -> list[Document]:
         saved_documents = []

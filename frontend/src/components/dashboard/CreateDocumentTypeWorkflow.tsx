@@ -46,8 +46,45 @@ export function CreateDocumentTypeWorkflow({
     setIsLoadingWorkflow(true);
     setWorkflowError(null);
 
+    // Create a temporary document type and navigate immediately
+    const tempDocType: DocumentType = {
+      id: docId, // Use docId temporarily
+      title: typeName,
+      uploaded: 1,
+      reviewPending: 0,
+      approved: 0,
+      documents: [
+        {
+          id: docId,
+          name: file.name,
+          status: "processing",
+          date_added: new Date().toISOString(),
+        },
+      ],
+    };
+
+    // Navigate immediately with temporary data
+    onSuccess(tempDocType, [
+      {
+        id: docId,
+        name: file.name,
+        status: "processing",
+        uploadedBy: "System",
+        uploadType: "Direct Upload",
+        dateModified: new Date().toLocaleString("en-US", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }),
+        dateAdded: new Date().toLocaleString("en-US", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }),
+      },
+    ]);
+
+    // Continue with API calls in the background
     try {
-      // Step 1: Create document type (moved from Dashboard)
+      // Step 1: Create document type
       const createResponse = await fetch("/api/v1/document-types", {
         method: "POST",
         headers: {
@@ -72,7 +109,7 @@ export function CreateDocumentTypeWorkflow({
         `Document type "${createdType.title}" created successfully.`,
       );
 
-      // Step 2: Associate document with the type (moved from Dashboard)
+      // Step 2: Associate document with the type
       const addDocResponse = await fetch(
         `/api/v1/document-types/${createdType.id}/documents`,
         {
@@ -88,25 +125,18 @@ export function CreateDocumentTypeWorkflow({
       );
 
       if (!addDocResponse.ok) {
-        // Potentially roll back or offer retry for document association
         throw new Error(
           `Failed to associate document with type: ${addDocResponse.statusText} (status: ${addDocResponse.status})`,
         );
       }
 
-      const updatedTypeWithDocInfo: DocumentType = await addDocResponse.json(); // Backend returns the updated type with document list
+      const updatedTypeWithDocInfo: DocumentType = await addDocResponse.json();
       console.log(
         "Document associated, backend returned:",
         updatedTypeWithDocInfo,
       );
 
-      // Step 3: Fetch all documents for this type to pass to onSuccess (moved from Dashboard)
-      // The updatedTypeWithDocInfo from the POST might already contain the documents.
-      // If not, or to be sure, we can fetch them.
-      // Let\'s assume the POST response for associating document now returns the type *and* its documents
-      // to align with what `onSuccess` expects.
-      // If `updatedTypeWithDocInfo.documents` is populated, use that. Otherwise, fetch.
-
+      // Update the document list with the latest data
       let finalDocuments: Document[] = [];
       if (
         updatedTypeWithDocInfo.documents &&
@@ -117,8 +147,8 @@ export function CreateDocumentTypeWorkflow({
             id: doc.id,
             name: doc.name,
             status: doc.status,
-            uploadedBy: "System", // Placeholder
-            uploadType: "Direct Upload", // Placeholder
+            uploadedBy: "System",
+            uploadType: "Direct Upload",
             dateModified: new Date(doc.date_added).toLocaleString("en-US", {
               dateStyle: "medium",
               timeStyle: "short",
@@ -129,38 +159,9 @@ export function CreateDocumentTypeWorkflow({
             }),
           }),
         );
-      } else {
-        // Fallback: Fetch documents separately if not included
-        const docsResponse = await fetch(
-          `/api/v1/document-types/${createdType.id}/documents`,
-        );
-        if (!docsResponse.ok) {
-          throw new Error(
-            `Failed to fetch documents for type ${createdType.title}: ${docsResponse.status}`,
-          );
-        }
-        const docsData: ApiDocument[] = await docsResponse.json();
-        finalDocuments = docsData.map((doc: ApiDocument) => ({
-          id: doc.id,
-          name: doc.name,
-          status: doc.status,
-          uploadedBy: "System", // Placeholder
-          uploadType: "Direct Upload", // Placeholder
-          dateModified: new Date(doc.date_added).toLocaleString("en-US", {
-            dateStyle: "medium",
-            timeStyle: "short",
-          }),
-          dateAdded: new Date(doc.date_added).toLocaleString("en-US", {
-            dateStyle: "medium",
-            timeStyle: "short",
-          }),
-        }));
       }
 
-      // The `createdType` from step 1 might not have the `documents` array.
-      // `updatedTypeWithDocInfo` is more complete if the backend returns it fully.
-      // Let's use `updatedTypeWithDocInfo` as the first arg if it includes all necessary fields of DocumentType.
-      // Assuming updatedTypeWithDocInfo is a full DocumentType object.
+      // Update the UI with the final data
       onSuccess(updatedTypeWithDocInfo, finalDocuments);
     } catch (err) {
       console.error(
@@ -169,10 +170,7 @@ export function CreateDocumentTypeWorkflow({
       );
       const message =
         err instanceof Error ? err.message : "An unknown error occurred.";
-      setWorkflowError(`Failed to complete process: ${message}`);
       toast.error(`Operation failed: ${message}`);
-      // Decide if onCancel should be called or if the user can retry from the form.
-      // For now, keep them on the form to see the error.
     } finally {
       setIsLoadingWorkflow(false);
     }

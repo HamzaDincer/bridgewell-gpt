@@ -325,7 +325,7 @@ function AnnotationLayer({
             title={annotation.content}
           />
         </div>
-      ))}
+        ))}
     </div>
   );
 }
@@ -390,8 +390,8 @@ export default function DocumentReviewPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        setLoading(true);
-        setError(null);
+    setLoading(true);
+    setError(null);
 
         console.log("Fetching data for document:", params.docId);
 
@@ -455,11 +455,11 @@ export default function DocumentReviewPage() {
         }}
       >
         {pdfUrl && (
-          <Document
-            file={pdfUrl}
+            <Document
+              file={pdfUrl}
             onLoadSuccess={handleDocumentLoadSuccess}
             loading={<div>Loading PDF...</div>}
-          >
+            >
             {Array.from(new Array(numPages), (_, index) => {
               const pageNum = index + 1;
               return (
@@ -481,7 +481,7 @@ export default function DocumentReviewPage() {
                     renderTextLayer={false}
                     width={800}
                   >
-                    <AnnotationLayer
+                  <AnnotationLayer
                       annotations={annotationsByPage[pageNum] || []}
                       pageNumber={pageNum}
                     />
@@ -489,7 +489,7 @@ export default function DocumentReviewPage() {
                 </div>
               );
             })}
-          </Document>
+            </Document>
         )}
       </div>
       <ConnectorLine activeField={activeField} annotations={allAnnotations} />

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useDropzone, FileRejection } from "react-dropzone";
 import { cn } from "@/lib/utils";
+import { useUpload } from "@/contexts/UploadContext";
 
 // Import CreateDocumentTypeFormProps from @/types
 import type { CreateDocumentTypeFormProps } from "@/types";
@@ -30,6 +31,7 @@ export function CreateDocumentTypeForm({
   const [acceptedFile, setAcceptedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { addUpload, updateUpload } = useUpload();
 
   const onDrop = useCallback(
     (acceptedFiles: File[], fileRejections: FileRejection[]) => {
@@ -83,11 +85,18 @@ export function CreateDocumentTypeForm({
 
     const formData = new FormData();
     formData.append("file", acceptedFile);
+    formData.append("document_type_name", documentTypeName.trim());
+
+    // Add upload to global state
+    const uploadId = addUpload({
+      fileName: acceptedFile.name,
+      status: "uploading",
+      progress: 0,
+    });
 
     try {
       // Create AbortController for timeout
       const controller = new AbortController();
-      // Set 10-minute timeout to match backend
       const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000);
 
       try {
@@ -114,13 +123,89 @@ export function CreateDocumentTypeForm({
         console.log("Ingest successful:", result);
 
         const docId = result?.data?.[0]?.doc_id;
+
+        if (!docId) {
+          throw new Error("No document ID received from server");
+        }
+
+        // Navigate immediately after getting document ID
         onCreate(documentTypeName, acceptedFile, docId);
+
+        // Start background processing
+        const processInBackground = async () => {
+          try {
+            // Update to processing state
+            updateUpload(uploadId, {
+              status: "processing",
+              progress: 50,
+            });
+
+            // Poll for extraction status
+            const checkExtractionStatus = async () => {
+              try {
+                const extractionResponse = await fetch(
+                  `/api/v1/documents/${docId}/extraction`,
+                );
+                const data = await extractionResponse.json();
+
+                if (data.status === "completed") {
+                  updateUpload(uploadId, {
+                    status: "completed",
+                    progress: 100,
+                  });
+                  return true;
+                } else if (data.status === "error") {
+                  updateUpload(uploadId, {
+                    status: "error",
+                    error: data.message || "Processing failed",
+                  });
+                  return true;
+                }
+                return false;
+              } catch (error) {
+                console.error("Error checking extraction status:", error);
+                return false;
+              }
+            };
+
+            // Poll every 2 seconds until complete
+            const pollInterval = setInterval(async () => {
+              const isComplete = await checkExtractionStatus();
+              if (isComplete) {
+                clearInterval(pollInterval);
+              }
+            }, 2000);
+
+            // Set a timeout to stop polling after 5 minutes
+            setTimeout(() => {
+              clearInterval(pollInterval);
+              updateUpload(uploadId, {
+                status: "error",
+                error: "Processing timed out",
+              });
+            }, 5 * 60 * 1000);
+          } catch (error) {
+            console.error("Background processing error:", error);
+            updateUpload(uploadId, {
+              status: "error",
+              error:
+                error instanceof Error ? error.message : "Processing failed",
+            });
+          }
+        };
+
+        // Start background processing without awaiting
+        processInBackground();
       } catch (fetchError) {
         if (fetchError instanceof Error) {
           if (fetchError.name === "AbortError") {
-            throw new Error(
-              "The upload timed out. This could be because the file is too large or the server is busy processing other documents. Please try again or contact support if the issue persists.",
-            );
+            const errorMsg =
+              "The upload timed out. This could be because the file is too large or the server is busy processing other documents. Please try again or contact support if the issue persists.";
+            updateUpload(uploadId, {
+              status: "error",
+              error: errorMsg,
+            });
+            throw new Error(errorMsg);
           }
           throw fetchError;
         }
@@ -133,6 +218,10 @@ export function CreateDocumentTypeForm({
           ? err.message
           : "An unexpected error occurred during upload.";
       setError(message);
+      updateUpload(uploadId, {
+        status: "error",
+        error: message,
+      });
     } finally {
       setIsLoading(false);
     }

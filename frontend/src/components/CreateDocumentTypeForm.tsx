@@ -85,28 +85,47 @@ export function CreateDocumentTypeForm({
     formData.append("file", acceptedFile);
 
     try {
-      const response = await fetch("/api/v1/ingest/file", {
-        method: "POST",
-        body: formData,
-      });
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      // Set 10-minute timeout to match backend
+      const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000);
 
-      if (!response.ok) {
-        let errorMsg = `Upload failed with status: ${response.status}`;
-        try {
-          const errorData = await response.json();
-          errorMsg = errorData.detail || errorMsg;
-        } catch {
-          /* Ignore JSON parsing error */
+      try {
+        const response = await fetch("/api/v1/ingest/file", {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          let errorMsg = `Upload failed with status: ${response.status}`;
+          try {
+            const errorData = await response.json();
+            errorMsg = errorData.detail || errorMsg;
+          } catch {
+            /* Ignore JSON parsing error */
+          }
+          throw new Error(errorMsg);
         }
-        throw new Error(errorMsg);
+
+        const result = await response.json();
+        console.log("Ingest successful:", result);
+
+        const docId = result?.data?.[0]?.doc_id;
+        onCreate(documentTypeName, acceptedFile, docId);
+      } catch (fetchError) {
+        if (fetchError instanceof Error) {
+          if (fetchError.name === "AbortError") {
+            throw new Error(
+              "The upload timed out. This could be because the file is too large or the server is busy processing other documents. Please try again or contact support if the issue persists.",
+            );
+          }
+          throw fetchError;
+        }
+        throw fetchError;
       }
-
-      const result = await response.json();
-      console.log("Ingest successful:", result);
-
-      const docId = result?.data?.[0]?.doc_id;
-
-      onCreate(documentTypeName, acceptedFile, docId);
     } catch (err: unknown) {
       console.error("Upload error:", err);
       const message =

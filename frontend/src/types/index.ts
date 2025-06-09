@@ -59,20 +59,41 @@ export interface Annotation {
   id: string;
   content: string;
   position: { x: number; y: number };
-  type: "bounding_box";
+  type: string;
   color: string;
   pageNumber: number;
   width: number;
   height: number;
 }
 
-export type AnnotationsByPage = {
-  [key: string]: Annotation[];
-};
+export interface AnnotationsByPage {
+  [pageNumber: string]: Annotation[];
+}
 
-export type ExtractionSection = Record<string, string>;
+export interface ExtractionField {
+  value: string;
+  page: number | null;
+  coordinates: {
+    x: number | null;
+    y: number | null;
+    width: number | null;
+    height: number | null;
+  } | null;
+  source_snippet: string;
+}
 
-export type ExtractionData = Record<string, ExtractionSection>;
+export interface ExtractionResult {
+  extraction_id: string;
+  document_type: string;
+  file_name: string;
+  status: string;
+  result: {
+    [key: string]: ExtractionField;
+  };
+  timestamp: string;
+}
+
+export type ExtractionData = Record<string, ExtractionField>;
 
 // For FieldSetupView
 export type FieldType = "text" | "number" | "date" | "checkbox" | "select"; // Added select type

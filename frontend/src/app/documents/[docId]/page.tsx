@@ -12,242 +12,117 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 ).toString();
 
 // Import types from @/types
-import type {
-  Annotation,
-  AnnotationsByPage,
-  // ExtractionSection,
-  ExtractionData,
-} from "@/types";
-
-// User provided hardcoded extraction data
-const hardcodedExtractionData = {
-  schedule: {
-    value: "$25,000",
-    page: "1",
-    coordinates: {
-      x: 0.08875,
-      y: 0.2798529411764706,
-      width: 0.37999999999999995,
-      height: 0.0558088235294117,
-    },
-    source_snippet: "$25,000 Reducing by 50% at age 65.",
-  },
-  reduction: {
-    value: "Reducing by 50% at age 65",
-    page: "1",
-    coordinates: {
-      x: 0.08875,
-      y: 0.2798529411764706,
-      width: 0.37999999999999995,
-      height: 0.0558088235294117,
-    },
-    source_snippet: "$25,000 Reducing by 50% at age 65.",
-  },
-  non_evidence_maximum: {
-    value: "$5,850",
-    page: "1",
-    coordinates: {
-      x: 0.08875,
-      y: 0.6171323529411764,
-      width: 0.82125,
-      height: 0.2119117647058825,
-    },
-    source_snippet:
-      "Any amount of LTD Insurance over $5,850 is subject to approval of evidence of insurability.",
-  },
-  termination_age: {
-    value: "65",
-    page: "1",
-    coordinates: {
-      x: 0.08875,
-      y: 0.6171323529411764,
-      width: 0.82125,
-      height: 0.2119117647058825,
-    },
-    source_snippet: "Benefit period: to age 65",
-  },
-};
-
-// Function to transform hardcodedExtractionData to AnnotationsByPage format
-function transformExtractionToAnnotations(
-  extractionData: typeof hardcodedExtractionData,
-): AnnotationsByPage {
-  const annotationsByPage: AnnotationsByPage = {};
-
-  Object.entries(extractionData).forEach(([key, data]) => {
-    const pageStr = data.page;
-    if (!annotationsByPage[pageStr]) {
-      annotationsByPage[pageStr] = [];
-    }
-    annotationsByPage[pageStr].push({
-      id: key, // Use the field key as id
-      content: data.value, // Use the extracted value as content for title tooltip
-      position: { x: data.coordinates.x, y: data.coordinates.y },
-      type: "bounding_box",
-      color: "#f59e0b", // Default color, can be customized
-      pageNumber: parseInt(pageStr, 10),
-      width: data.coordinates.width,
-      height: data.coordinates.height,
-    });
-  });
-
-  return annotationsByPage;
-}
-
-// Hardcoded insurance extraction schema
-const insuranceExtractionSchema: Record<string, Record<string, string>> = {
-  life_insurance_ad_d: {
-    schedule: "",
-    reduction: "",
-    non_evidence_maximum: "",
-    termination_age: "",
-  },
-  dependent_life: {
-    schedule: "",
-    termination_age: "",
-  },
-  critical_illness: {
-    schedule: "",
-    impairments: "",
-    termination_age: "",
-  },
-  long_term_disability: {
-    schedule: "",
-    monthly_maximum: "",
-    tax_status: "",
-    elimination_period: "",
-    benefit_period: "",
-    definition: "",
-    offsets: "",
-    cost_of_living_adjustment: "",
-    pre_existing: "",
-    survivor_benefit: "",
-    non_evidence_maximum: "",
-    termination_age: "",
-  },
-  short_term_disability: {
-    schedule: "",
-    weekly_maximum: "",
-    tax_status: "",
-    elimination_period: "",
-    benefit_period: "",
-    non_evidence_maximum: "",
-    termination_age: "",
-  },
-  health_care: {
-    prescription_drugs: "",
-    pay_direct_drug_card: "",
-    maximum: "",
-    fertility_drugs: "",
-    smoking_cessations: "",
-    vaccines: "",
-    major_medical: "",
-    annual_deductible: "",
-    hospitalization: "",
-    orthotic_shoes: "",
-    orthotic_inserts: "",
-    hearing_aids: "",
-    vision_care: "",
-    eye_exams: "",
-    paramedical_practitioners: "",
-    included_specialists: "",
-    out_of_country: "",
-    maximum_duration: "",
-    trip_cancellation: "",
-    private_duty_nursing: "",
-    survivor_benefit: "",
-    termination_age: "",
-  },
-  dental_care: {
-    annual_deductible: "",
-    basic_and_preventative: "",
-    periodontic_and_endodontic: "",
-    annual_maximum: "",
-    major_restorative_services: "",
-    orthodontic_services: "",
-    lifetime_maximum: "",
-    recall_frequency: "",
-    scaling_and_rooting_units: "",
-    white_filings: "",
-    fee_guide: "",
-    survivor_benefit: "",
-    termination_age: "",
-  },
-  notes_and_definitions: {
-    dependent_child_definition: "",
-    benefit_year: "",
-    second_medical_opinion: "",
-    eap: "",
-    digital_wellness_program: "",
-    virtual_healthcare_services: "",
-  },
-};
-
-function mergeExtractionWithSchema(
-  schema: ExtractionData,
-  extraction: ExtractionData,
-): ExtractionData {
-  const result: ExtractionData = {};
-  for (const key in schema) {
-    result[key] = { ...schema[key], ...(extraction?.[key] || {}) };
-  }
-  return result;
-}
+import type { Annotation, AnnotationsByPage, ExtractionResult } from "@/types";
 
 function toLabel(str: string) {
   return str.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function AnnotationLayer({
-  annotations,
-  pageNumber,
-}: {
-  annotations: Annotation[];
-  pageNumber: number;
-}) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        pointerEvents: "none",
-      }}
-    >
-      {annotations
-        .filter((ann) => ann.pageNumber === pageNumber)
-        .map((annotation) => (
-          <div
-            key={annotation.id}
-            style={{
-              position: "absolute",
-              left: `${annotation.position.x * 100}%`,
-              top: `${annotation.position.y * 96}%`,
-              width: `${annotation.width * 100}%`,
-              height: `${annotation.height * 150}%`,
-              border: `2px solid ${annotation.color}`,
-              backgroundColor: `${annotation.color}20`,
-              pointerEvents: "auto",
-              cursor: "pointer",
-              zIndex: 1000,
-            }}
-            title={annotation.content}
-          />
-        ))}
-    </div>
-  );
+// Function to transform extraction result to annotations
+function transformExtractionToAnnotations(
+  extractionResult: ExtractionResult | null,
+): AnnotationsByPage {
+  const annotationsByPage: AnnotationsByPage = {};
+  const annotationMap = new Map();
+
+  if (!extractionResult?.result) {
+    return annotationsByPage;
+  }
+
+  Object.entries(extractionResult.result).forEach(([sectionName, section]) => {
+    if (!section) {
+      return;
+    }
+
+    Object.entries(section).forEach(([fieldName, field]) => {
+      if (!field || typeof field.page !== "number" || !field.coordinates) {
+        return;
+      }
+
+      const { x, y, width, height } = field.coordinates;
+      if (x === null || y === null || width === null || height === null) {
+        return;
+      }
+
+      const pageNumber = field.page + 1;
+      const coordKey = `${pageNumber}-${x}-${y}-${width}-${height}`;
+
+      let existingAnnotation = annotationMap.get(coordKey);
+      const newContent = `${toLabel(sectionName)} - ${toLabel(fieldName)}: ${
+        field.value
+      }\n\nSource: ${field.source_snippet || "N/A"}`;
+
+      if (existingAnnotation) {
+        existingAnnotation.content += "\n---\n" + newContent;
+      } else {
+        existingAnnotation = {
+          id: coordKey, // Use coordKey as stable ID instead of random
+          content: newContent,
+          position: { x, y },
+          type: "bounding_box",
+          color: "#f59e0b",
+          pageNumber,
+          width,
+          height,
+        };
+        annotationMap.set(coordKey, existingAnnotation);
+      }
+    });
+  });
+
+  // Convert map to required format
+  annotationMap.forEach((annotation) => {
+    const pageStr = annotation.pageNumber.toString();
+    if (!annotationsByPage[pageStr]) {
+      annotationsByPage[pageStr] = [];
+    }
+    annotationsByPage[pageStr].push(annotation);
+  });
+
+  return annotationsByPage;
 }
+
+function scrollToPage(pageNumber: number) {
+  const pageElement = document.querySelector(
+    `[data-page-number="${pageNumber}"]`,
+  );
+  if (pageElement) {
+    pageElement.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+function highlightAnnotation(annotationId: string) {
+  // Remove previous highlight
+  const previousHighlight = document.querySelector(".annotation-highlight");
+  if (previousHighlight) {
+    previousHighlight.classList.remove("annotation-highlight");
+  }
+
+  // Add highlight to new annotation
+  const annotation = document.querySelector(
+    `[data-annotation-id="${annotationId}"]`,
+  );
+  if (annotation) {
+    annotation.classList.add("annotation-highlight");
+  }
+}
+
+// Add a type for active field
+type ActiveField = {
+  fieldRect: DOMRect;
+  annotationId: string;
+} | null;
 
 function ExtractionPanel({
   extraction,
   loading,
   error,
+  onFieldClick,
 }: {
-  extraction: ExtractionData;
+  extraction: ExtractionResult | null;
   loading: boolean;
   error: string | null;
+  onFieldClick: (field: ActiveField) => void;
 }) {
   return (
     <div
@@ -260,233 +135,364 @@ function ExtractionPanel({
         borderRight: "1px solid #e5e7eb",
       }}
     >
-      <h2 style={{ fontWeight: 600, fontSize: 22, marginBottom: 20 }}>
-        Extraction
-      </h2>
-      {loading ? (
-        <div>Loading extraction...</div>
-      ) : error ? (
-        <div style={{ color: "red" }}>{error}</div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          {Object.entries(extraction).map(([section, fields]) => (
-            <div
-              key={section}
-              style={{
-                background: "#fff",
-                borderRadius: 8,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-                padding: 16,
-                border: "1px solid #e5e7eb",
-              }}
-            >
-              <div
-                style={{
-                  fontWeight: 600,
-                  fontSize: 16,
-                  marginBottom: 10,
-                  color: "#6366f1",
-                  letterSpacing: 0.5,
-                }}
-              >
-                {toLabel(section)}
-              </div>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <tbody>
-                  {Object.entries(fields).map(([key, value]) => (
-                    <tr key={key}>
-                      <td
-                        style={{
-                          fontWeight: 500,
-                          padding: "4px 8px 4px 0",
-                          color: "#374151",
-                          width: 180,
-                          verticalAlign: "top",
-                        }}
-                      >
-                        {toLabel(key)}
-                      </td>
-                      <td
-                        style={{
-                          padding: "4px 0",
-                          color: value ? "#111" : "#aaa",
-                          fontStyle: value ? "normal" : "italic",
-                        }}
-                      >
-                        {value || "(empty)"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
+      {loading && <div>Loading...</div>}
+      {error && <div style={{ color: "red" }}>{error}</div>}
+      {extraction && (
+        <div>
+          {Object.entries(extraction.result).map(
+            ([sectionName, section]) =>
+              section && (
+                <div key={sectionName} style={{ marginBottom: 32 }}>
+                  <h3
+                    style={{
+                      fontWeight: 600,
+                      fontSize: 16,
+                      marginBottom: 16,
+                      padding: "8px 12px",
+                      backgroundColor: "#e5e7eb",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    {toLabel(sectionName)}
+                  </h3>
+                  <div
+                    style={{
+                      display: "table",
+                      width: "100%",
+                      borderCollapse: "collapse",
+                    }}
+                  >
+                    {Object.entries(section).map(([fieldName, field]) => {
+                      return (
+                        <div
+                          key={fieldName}
+                          onClick={(e) => {
+                            if (
+                              field?.page !== undefined &&
+                              field?.coordinates
+                            ) {
+                              const pageNumber = field.page + 1;
+                              const { x, y, width, height } = field.coordinates;
+                              const annotationId = `${pageNumber}-${x}-${y}-${width}-${height}`;
+                              const fieldRect =
+                                e.currentTarget.getBoundingClientRect();
+                              onFieldClick({ fieldRect, annotationId });
+                              scrollToPage(pageNumber);
+                              highlightAnnotation(annotationId);
+                            }
+                          }}
+                          className={field?.coordinates ? "clickable-row" : ""}
+                          style={{
+                            display: "table-row",
+                            borderBottom: "1px solid #e5e7eb",
+                            backgroundColor: field?.value
+                              ? "transparent"
+                              : "#fafafa",
+                            cursor: field?.coordinates ? "pointer" : "default",
+                            transition: "background-color 0.2s ease",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "table-cell",
+                              padding: "8px 12px",
+                              fontWeight: 500,
+                              color: field?.value ? "#4b5563" : "#9ca3af",
+                              width: "40%",
+                              verticalAlign: "top",
+                            }}
+                          >
+                            {toLabel(fieldName)}
+                          </div>
+                          <div
+                            style={{
+                              display: "table-cell",
+                              padding: "8px 12px",
+                              verticalAlign: "top",
+                              color: field?.value ? "#000" : "#9ca3af",
+                              fontStyle: field?.value ? "normal" : "italic",
+                            }}
+                          >
+                            {field?.value || "(Not found)"}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ),
+          )}
         </div>
       )}
     </div>
   );
 }
 
-export default function DocumentReviewPage() {
-  const params = useParams();
-  const docId = Array.isArray(params?.docId) ? params.docId[0] : params?.docId;
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [extraction, setExtraction] = useState<ExtractionData>({});
-  const [numPages, setNumPages] = useState<number>(1);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [clickPosition, setClickPosition] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-  const [selectedPage, setSelectedPage] = useState<number | null>(null);
+function ConnectorLine({
+  activeField,
+  annotations,
+}: {
+  activeField: ActiveField;
+  annotations: Annotation[];
+}) {
+  if (!activeField) return null;
 
-  // Transform the hardcoded data for the AnnotationLayer
-  const transformedAnnotations = transformExtractionToAnnotations(
-    hardcodedExtractionData,
+  const annotation = annotations.find((a) => a.id === activeField.annotationId);
+  if (!annotation) return null;
+
+  // Get the page element that contains the annotation
+  const pageElement = document.querySelector(
+    `[data-page-number="${annotation.pageNumber}"]`,
   );
+  if (!pageElement) return null;
 
-  useEffect(() => {
-    if (!docId) return;
-    setLoading(true);
-    setError(null);
-    fetch(`/api/v1/documents/${docId}`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Failed to fetch document data");
-        return res.json();
-      })
-      .then((data) => {
-        setPdfUrl(data.url);
-        setExtraction(data.extraction || {});
-      })
-      .catch((err) => {
-        setError(err.message);
-      })
-      .finally(() => setLoading(false));
-  }, [docId]);
+  const pageRect = pageElement.getBoundingClientRect();
+  const fieldRect = activeField.fieldRect;
 
-  const mergedExtraction = mergeExtractionWithSchema(
-    insuranceExtractionSchema,
-    extraction as ExtractionData,
-  );
-
-  const handlePageClick = (
-    e: React.MouseEvent<HTMLDivElement>,
-    pageNumber: number,
-  ) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    setClickPosition({ x, y });
-    setSelectedPage(pageNumber);
-
-    // Log the coordinates for easy copying
-    console.log(`Page ${pageNumber} coordinates:`, { x, y });
-  };
+  // Calculate connector line points
+  const startX = fieldRect.right;
+  const startY = fieldRect.top + fieldRect.height / 2;
+  const endX = pageRect.left + annotation.position.x * pageRect.width;
+  const endY =
+    pageRect.top +
+    annotation.position.y * pageRect.height +
+    (annotation.height * pageRect.height) / 2;
 
   return (
-    <div style={{ display: "flex", height: "100vh", background: "#f3f4f6" }}>
+    <svg
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        pointerEvents: "none",
+        zIndex: 9999,
+      }}
+    >
+      <line
+        x1={startX}
+        y1={startY}
+        x2={endX}
+        y2={endY}
+        stroke="#f59e0b"
+        strokeWidth="2"
+        strokeDasharray="4 2"
+      />
+    </svg>
+  );
+}
+
+function AnnotationLayer({
+  annotations,
+  pageNumber,
+}: {
+  annotations: Annotation[];
+  pageNumber: number;
+}) {
+  const pageAnnotations = annotations.filter(
+    (ann) => ann.pageNumber === pageNumber,
+  );
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        pointerEvents: "none",
+      }}
+    >
+      {pageAnnotations.map((annotation) => (
+        <div key={annotation.id}>
+          <div
+            data-annotation-id={annotation.id}
+            style={{
+              position: "absolute",
+              left: `${annotation.position.x * 100}%`,
+              top: `${annotation.position.y * 100}%`,
+              width: `${annotation.width * 100}%`,
+              height: `${annotation.height * 100}%`,
+              border: `2px solid ${annotation.color}`,
+              backgroundColor: `${annotation.color}20`,
+              pointerEvents: "auto",
+              cursor: "pointer",
+              zIndex: 1000,
+              transition: "all 0.3s ease",
+            }}
+            title={annotation.content}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StyleManager() {
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.textContent = `
+      .annotation-highlight {
+        border: 2px solid #2563eb !important;
+        background-color: rgba(37, 99, 235, 0.2) !important;
+        box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.4);
+      }
+      .clickable-row:hover {
+        background-color: #f3f4f6 !important;
+      }
+    `;
+    document.head.appendChild(style);
+
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
+  return null;
+}
+
+export default function DocumentReviewPage() {
+  const params = useParams();
+  const [numPages, setNumPages] = useState<number>(0);
+  const [pdfUrl, setPdfUrl] = useState<string>("");
+  const [extractionResult, setExtractionResult] =
+    useState<ExtractionResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeField, setActiveField] = useState<ActiveField>(null);
+
+  // Add click handler to clear active field
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      // Check if click is outside the extraction panel and annotation boxes
+      const target = e.target as HTMLElement;
+      const isClickable =
+        target.closest(".clickable-row") ||
+        target.closest("[data-annotation-id]");
+      if (!isClickable) {
+        setActiveField(null);
+        // Also remove any existing highlight
+        const previousHighlight = document.querySelector(
+          ".annotation-highlight",
+        );
+        if (previousHighlight) {
+          previousHighlight.classList.remove("annotation-highlight");
+        }
+      }
+    };
+
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, []);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        console.log("Fetching data for document:", params.docId);
+
+        // Fetch document data including PDF URL and extraction
+        const docResponse = await fetch(`/api/v1/documents/${params.docId}`);
+        if (!docResponse.ok) {
+          throw new Error("Failed to fetch document data");
+        }
+        const docData = await docResponse.json();
+        console.log("Document data received:", docData);
+        setPdfUrl(docData.url);
+
+        // Fetch extraction results
+        const extractionResponse = await fetch(
+          `/api/v1/documents/${params.docId}/extraction`,
+        );
+        if (!extractionResponse.ok) {
+          throw new Error("Failed to fetch extraction data");
+        }
+        const extractionData = await extractionResponse.json();
+        console.log("Extraction data received:", extractionData);
+        setExtractionResult(extractionData);
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        setError(err instanceof Error ? err.message : "An error occurred");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (params.docId) {
+      fetchData();
+    }
+  }, [params.docId]);
+
+  const handleDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    setNumPages(numPages);
+  };
+
+  const annotationsByPage = transformExtractionToAnnotations(extractionResult);
+  const allAnnotations = Object.values(annotationsByPage).flat();
+
+  return (
+    <div style={{ display: "flex", height: "100vh" }}>
+      <StyleManager />
       <ExtractionPanel
-        extraction={mergedExtraction}
+        extraction={extractionResult}
         loading={loading}
         error={error}
+        onFieldClick={setActiveField}
       />
-      {/* PDF Viewer Panel */}
       <div
         style={{
           flex: 1,
-          background: "#fff",
+          padding: 24,
+          overflowY: "auto",
           display: "flex",
           flexDirection: "column",
-          minWidth: 0,
+          alignItems: "center",
+          backgroundColor: "#f3f4f6",
         }}
       >
-        {loading ? (
-          <div style={{ padding: 20 }}>Loading PDF...</div>
-        ) : error ? (
-          <div style={{ padding: 20, color: "red" }}>{error}</div>
-        ) : pdfUrl ? (
-          <div
-            style={{
-              flex: 1,
-              background: "#f3f4f6",
-              display: "flex",
-              flexDirection: "column",
-              overflow: "auto",
-              padding: "20px 0",
-            }}
+        {pdfUrl && (
+          <Document
+            file={pdfUrl}
+            onLoadSuccess={handleDocumentLoadSuccess}
+            loading={<div>Loading PDF...</div>}
           >
-            <Document
-              file={pdfUrl}
-              onLoadSuccess={({ numPages }) => setNumPages(numPages)}
-              onLoadError={(err) => setError(err.message)}
-              loading={<div style={{ padding: 20 }}>Loading PDF...</div>}
-            >
-              {Array.from(new Array(numPages), (el, index) => (
+            {Array.from(new Array(numPages), (_, index) => {
+              const pageNum = index + 1;
+              return (
                 <div
-                  key={`page_${index + 1}`}
+                  key={pageNum}
+                  data-page-number={pageNum}
                   style={{
-                    margin: "0 auto 20px",
-                    background: "#fff",
-                    padding: "20px",
-                    borderRadius: "8px",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                    marginBottom: 24,
                     position: "relative",
-                    cursor: "crosshair",
+                    backgroundColor: "white",
+                    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                    borderRadius: "4px",
                   }}
-                  onClick={(e) => handlePageClick(e, index + 1)}
                 >
                   <Page
-                    pageNumber={index + 1}
-                    width={Math.min(900, window.innerWidth - 500)}
-                    renderTextLayer={true}
-                    renderAnnotationLayer={true}
-                  />
-                  <AnnotationLayer
-                    annotations={transformedAnnotations[index + 1] || []}
-                    pageNumber={index + 1}
-                  />
-                  {clickPosition && selectedPage === index + 1 && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: clickPosition.x,
-                        top: clickPosition.y,
-                        width: "10px",
-                        height: "10px",
-                        backgroundColor: "red",
-                        borderRadius: "50%",
-                        transform: "translate(-50%, -50%)",
-                        pointerEvents: "none",
-                      }}
+                    key={`page_${pageNum}`}
+                    pageNumber={pageNum}
+                    renderAnnotationLayer={false}
+                    renderTextLayer={false}
+                    width={800}
+                  >
+                    <AnnotationLayer
+                      annotations={annotationsByPage[pageNum] || []}
+                      pageNumber={pageNum}
                     />
-                  )}
+                  </Page>
                 </div>
-              ))}
-            </Document>
-            {clickPosition && selectedPage && (
-              <div
-                style={{
-                  position: "fixed",
-                  bottom: 20,
-                  right: 20,
-                  background: "white",
-                  padding: "10px 20px",
-                  borderRadius: "8px",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                  zIndex: 1000,
-                }}
-              >
-                <div>Page: {selectedPage}</div>
-                <div>X: {Math.round(clickPosition.x)}</div>
-                <div>Y: {Math.round(clickPosition.y)}</div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div style={{ padding: 20 }}>No PDF found.</div>
+              );
+            })}
+          </Document>
         )}
       </div>
+      <ConnectorLine activeField={activeField} annotations={allAnnotations} />
     </div>
   );
 }

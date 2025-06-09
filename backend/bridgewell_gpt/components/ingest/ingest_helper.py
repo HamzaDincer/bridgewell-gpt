@@ -2,28 +2,19 @@ import logging
 from pathlib import Path
 import os
 import shutil
+from typing import List
+import json
+import tempfile
 
 from llama_index.core.readers import StringIterableReader
 from llama_index.core.readers.base import BaseReader
 from llama_index.core.readers.json import JSONReader
 from llama_index.core.schema import Document
-from llama_cloud_services import LlamaParse
-from llama_index.core import SimpleDirectoryReader
-from dotenv import load_dotenv
+from agentic_doc.parse import parse_documents
+from bridgewell_gpt.components.extraction.extraction_component import ExtractionComponent
 from bridgewell_gpt.paths import local_data_path
 
-load_dotenv()
-
 logger = logging.getLogger(__name__)
-# Get API key from environment variable
-LLAMA_CLOUD_API_KEY = os.getenv("LLAMA_CLOUD_API_KEY")
-
-if not LLAMA_CLOUD_API_KEY:
-    logger.warning("LLAMA_CLOUD_API_KEY not found in environment variables")
-else:
-    logger.debug("LLAMA_CLOUD_API_KEY configured")
-
-llama_parser = LlamaParse(api_key=LLAMA_CLOUD_API_KEY, result_type="markdown")
 
 # Inspired by the `llama_index.core.readers.file.base` module
 def _try_loading_included_file_formats() -> dict[str, type[BaseReader]]:
@@ -48,11 +39,6 @@ def _try_loading_included_file_formats() -> dict[str, type[BaseReader]]:
 
     default_file_reader_cls: dict[str, type[BaseReader]] = {
         ".hwp": HWPReader,
-        ".pdf": PDFReader if not llama_parser else None,  # Use LlamaParse for PDFs if available
-        ".docx": DocxReader if not llama_parser else None,  # Use LlamaParse for DOCX if available
-        ".pptx": PptxReader if not llama_parser else None,  # Use LlamaParse for PPTX if available
-        ".ppt": PptxReader if not llama_parser else None,  # Use LlamaParse for PPT if available
-        ".pptm": PptxReader if not llama_parser else None,  # Use LlamaParse for PPTM if available
         ".jpg": ImageReader,
         ".png": ImageReader,
         ".jpeg": ImageReader,
@@ -64,8 +50,7 @@ def _try_loading_included_file_formats() -> dict[str, type[BaseReader]]:
         ".mbox": MboxReader,
         ".ipynb": IPYNBReader,
     }
-    # Remove None values (where LlamaParse will be used instead)
-    return {k: v for k, v in default_file_reader_cls.items() if v is not None}
+    return default_file_reader_cls
 
 # Patching the default file reader to support other file types
 FILE_READER_CLS = _try_loading_included_file_formats()
@@ -75,9 +60,6 @@ FILE_READER_CLS.update(
     }
 )
 
-# File extensions that LlamaParse can handle
-LLAMAPARSE_EXTENSIONS = {".pdf", ".docx", ".pptx", ".ppt", ".pptm"}
-
 class IngestionHelper:
     """Helper class to transform a file into a list of documents.
 
@@ -86,6 +68,7 @@ class IngestionHelper:
     """
     
     # Directory for storing original files
+    
     original_files_dir = local_data_path / "original_files"
     original_files_dir.mkdir(parents=True, exist_ok=True)
 
@@ -147,68 +130,97 @@ class IngestionHelper:
 
     @staticmethod
     def _load_file_to_documents(file_name: str, file_data: Path) -> list[Document]:
-        logger.debug("Transforming file_name=%s into documents", file_name)
-        extension = Path(file_name).suffix.lower()
+        """Load a file into a list of documents.
+        
+        Args:
+            file_name: Name of the file
+            file_data: Path to the file
+            
+        Returns:
+            List of documents with metadata including grounding info for extraction
+        """
+        logger.info(f"Loading file {file_name}")
 
-        # Try LlamaParse first for supported file types
-        if llama_parser and extension in LLAMAPARSE_EXTENSIONS:
-            try:
-                logger.info("Using LlamaParse for file_name=%s", file_name)
-                # Use SimpleDirectoryReader with LlamaParse as the file extractor
-                file_extractor = {extension: llama_parser}
-                raw_documents = SimpleDirectoryReader(
-                    input_files=[str(file_data)],
-                    file_extractor=file_extractor,
-                    filename_as_id=True,  # Use filename as document ID
-                ).load_data()
+        # Try agentic-doc first for all files
+        try:
+            logger.info(f"Using agentic-doc parser for {file_name}")
+            file_path = file_data.resolve()  # Get absolute path
+            if not file_path.exists():
+                raise FileNotFoundError(f"File not found: {file_path}")
                 
-                # Create new clean documents without unwanted metadata
+            logger.info(f"Parsing file at path: {file_path}")
+            parsed_docs = parse_documents([str(file_path)])
+            
+            if parsed_docs:
+                parsed_doc = parsed_docs[0]
+                logger.info(f"Got parsed document with {len(parsed_doc.chunks) if hasattr(parsed_doc, 'chunks') else 0} chunks")
                 documents = []
-                for raw_doc in raw_documents:
-                    # Create a new document with only the essential metadata
-                    clean_doc = Document(
-                        text=raw_doc.text,
+                for chunk in parsed_doc.chunks:
+                    logger.info(f"Processing chunk: type={chunk.chunk_type if hasattr(chunk, 'chunk_type') else 'unknown'}, "
+                              f"text_length={len(chunk.text) if hasattr(chunk, 'text') else 0}, "
+                              f"grounding_count={len(chunk.grounding) if hasattr(chunk, 'grounding') else 0}")
+                    doc = Document(
+                        text=chunk.text,
                         metadata={
                             "file_name": file_name,
-                            "doc_id": raw_doc.doc_id
-                        },
-                        excluded_embed_metadata_keys=["file_name", "doc_id"],
-                        excluded_llm_metadata_keys=["file_name", "doc_id", "page_label"],
-                        relationships={},  # Reset relationships
+                            "chunk_type": chunk.chunk_type.value if hasattr(chunk, 'chunk_type') else None,
+                            "chunk_id": chunk.chunk_id if hasattr(chunk, 'chunk_id') else None,
+                            "page": chunk.grounding[0].page if chunk.grounding else None,
+                            "bbox": [g.box.dict() for g in chunk.grounding] if chunk.grounding else None
+                        }
                     )
-                    documents.append(clean_doc)
+                    documents.append(doc)
                 
+                logger.info(f"Successfully parsed {len(documents)} chunks with agentic-doc")
+                return documents
+            else:
+                logger.warning("No documents parsed by agentic-doc, falling back to default reader")
+        except Exception as e:
+            logger.warning(f"agentic-doc failed for {file_name}, falling back to default reader: {e}")
+        
+        # Try default reader if available
+        file_extension = file_data.suffix.lower()
+        reader_cls = FILE_READER_CLS.get(file_extension)
+        if reader_cls:
+            try:
+                logger.info(f"Using default reader {reader_cls.__name__} for {file_name}")
+                reader = reader_cls()
+                documents = reader.load_data(file_data)
+                
+                # Add file name to metadata
+                for doc in documents:
+                    doc.metadata["file_name"] = file_name
+                
+                logger.info(f"Successfully loaded {len(documents)} documents with default reader")
                 return documents
             except Exception as e:
-                logger.warning(f"LlamaParse failed for {file_name}, falling back to default reader: {e}")
+                logger.warning(f"Default reader failed for {file_name}, falling back to string reader: {e}")
 
-        # Fall back to default readers
-        reader_cls = FILE_READER_CLS.get(extension)
-        if reader_cls is None:
-            logger.debug(
-                "No reader found for extension=%s, using default string reader",
-                extension,
-            )
+        # Fall back to string reader as last resort
+        try:
+            logger.info(f"Attempting to read {file_name} as text")
             try:
                 # Try reading as text first
                 text = file_data.read_text(errors='ignore')
-            except Exception as e:
-                logger.warning(f"Failed to read file as text: {e}")
-                # If text reading fails, try binary and decode with errors ignored
+            except Exception as text_e:
+                logger.warning(f"Failed to read as text, trying binary: {text_e}")
+                # If text reading fails, try binary and decode
                 with open(file_data, 'rb') as f:
                     text = f.read().decode('utf-8', errors='ignore')
             
             string_reader = StringIterableReader()
-            return string_reader.load_data([text])
+            documents = string_reader.load_data([text])
 
-        logger.debug("Specific reader found for extension=%s", extension)
-        documents = reader_cls().load_data(file_data)
+            # Add file name to metadata
+            for doc in documents:
+                doc.metadata["file_name"] = file_name
 
-        # Sanitize NUL bytes in text which can't be stored in Postgres
-        for i in range(len(documents)):
-            documents[i].text = documents[i].text.replace("\u0000", "")
-
-        return documents
+            logger.info(f"Successfully loaded file as text, created {len(documents)} documents")
+            return documents
+        except Exception as e:
+            error_msg = f"Failed to load file {file_name} with any available reader: {str(e)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
 
     @staticmethod
     def _exclude_metadata(documents: list[Document]) -> None:
@@ -218,11 +230,12 @@ class IngestionHelper:
             # We don't want the Embeddings search to receive this metadata
             document.excluded_embed_metadata_keys = [
                 "doc_id", "file_path", "file_type", "file_size",
+                "page","bbox","raw_chunk","chunk_type","chunk_id",
                 "creation_date", "last_modified_date"
             ]
             # We don't want the LLM to receive these metadata in the context
             document.excluded_llm_metadata_keys = [
-                "file_name", "doc_id", "page_label",
+                "file_name", "doc_id",  "page_label", "chunk_type", "chunk_id", "raw_chunk",
                 "file_path", "file_type", "file_size",
                 "creation_date", "last_modified_date"
             ]

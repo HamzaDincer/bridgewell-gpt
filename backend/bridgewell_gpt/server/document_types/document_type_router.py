@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, Request, HTTPException
-from typing import List
-from injector import Injector
 import os
+from typing import List, Optional, Dict, Any
+from fastapi import APIRouter, Depends, Request, HTTPException
+from injector import Injector
 
-from .document_type_service import DocumentTypeService
-from .document_type_models import DocumentTypeResponse, DocumentTypeCreate, DocumentCreate, DocumentResponse
+from bridgewell_gpt.server.document_types.document_type_models import DocumentTypeResponse, DocumentTypeCreate, DocumentCreate, DocumentResponse
+from bridgewell_gpt.server.document_types.document_type_service import DocumentTypeService
 from bridgewell_gpt.server.utils.auth import authenticated
+from bridgewell_gpt.components.extraction.extraction_component import ExtractionComponent
+from bridgewell_gpt.components.ingest.ingest_component import SimpleIngestComponent
 
 # Define router
 document_type_router = APIRouter(prefix="/v1", dependencies=[Depends(authenticated)])
@@ -93,19 +95,52 @@ def get_document_by_id(doc_id: str, request: Request):
     """Get a document's PDF URL and extraction fields by its ID."""
     injector: Injector = request.state.injector
     service = injector.get(DocumentTypeService)
+    extraction_component = injector.get(ExtractionComponent)
+    
     # Search all document types for the document
     doc_types = service.get_document_types()
     for doc_type in doc_types:
         for doc in getattr(doc_type, "documents", []):
             if str(doc.id) == str(doc_id):
-                # Assume file_name is stored as doc.name
+                # Get file name from doc.name
                 file_name = doc.name
-                # Extraction fields: you may want to load from a file or DB; here, return empty for now
-                extraction = getattr(doc, "extraction", {})
-                # Construct the PDF URL (adjust as needed)
+                
+                # Get extraction results using the file name
+                extraction_result = extraction_component.get_latest_extraction_by_file(file_name)
+                extraction = {}
+                if extraction_result:
+                    extraction = extraction_result.get("result", {})
+                
+                # Construct the PDF URL
                 backend_url = os.environ.get("BACKEND_API_URL", "http://localhost:8001")
                 url = f"{backend_url}/original_files/{file_name}"
+                
                 return {"url": url, "extraction": extraction}
+    raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
+
+@document_type_router.get(
+    "/documents/{doc_id}/extraction",
+    response_model=Dict[str, Any],
+    tags=["Document Types"]
+)
+def get_document_extraction(doc_id: str, request: Request) -> Dict[str, Any]:
+    """Get the latest extraction results for a document."""
+    injector: Injector = request.state.injector
+    service = injector.get(DocumentTypeService)
+    extraction_component = injector.get(ExtractionComponent)
+    
+    # First get the document to get its file name
+    doc_types = service.get_document_types()
+    for doc_type in doc_types:
+        for doc in getattr(doc_type, "documents", []):
+            if str(doc.id) == str(doc_id):
+                # Get extraction results using the file name
+                extraction_result = extraction_component.get_latest_extraction_by_file(doc.name)
+                if extraction_result:
+                    return extraction_result
+                else:
+                    return {"status": "not_found", "message": "No extraction results found"}
+                
     raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
 
 # We can add POST endpoint later if needed

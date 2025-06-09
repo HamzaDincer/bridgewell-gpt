@@ -17,6 +17,7 @@ from llama_index.core.ingestion import run_transformations
 from llama_index.core.schema import BaseNode, Document, TransformComponent
 from llama_index.core.storage import StorageContext
 
+from bridgewell_gpt.components.extraction.extraction_component import ExtractionComponent
 from bridgewell_gpt.components.ingest.ingest_helper import IngestionHelper
 from bridgewell_gpt.paths import local_data_path
 from bridgewell_gpt.settings.settings import Settings
@@ -112,10 +113,12 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
         storage_context: StorageContext,
         embed_model: EmbedType,
         transformations: list[TransformComponent],
+        extraction_component: ExtractionComponent,
         *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(storage_context, embed_model, transformations, *args, **kwargs)
+        self.extraction_component = extraction_component
 
     def ingest(self, file_name: str, file_data: Path) -> list[Document]:
         logger.info("Ingesting file_name=%s", file_name)
@@ -123,6 +126,19 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
         logger.info(
             "Transformed file=%s into count=%s documents", file_name, len(documents)
         )
+        # Extract the document using the injected component
+        extraction = self.extraction_component.extract_document(documents, "Benefit", file_name)
+        logger.info(f"Extraction: {extraction}")
+
+        # Store extraction result in document metadata
+        if extraction and extraction.get("status") == "completed":
+            for doc in documents:
+                if not doc.metadata:
+                    doc.metadata = {}
+                doc.metadata["extraction"] = extraction.get("result", {})
+                doc.metadata["extraction_id"] = extraction.get("extraction_id")
+                doc.metadata["document_type"] = extraction.get("document_type")
+
         logger.debug("Saving the documents in the index and doc store")
         return self._save_docs(documents)
 
@@ -514,4 +530,5 @@ def get_ingestion_component(
             storage_context=storage_context,
             embed_model=embed_model,
             transformations=transformations,
+            extraction_component=ExtractionComponent(),
         )

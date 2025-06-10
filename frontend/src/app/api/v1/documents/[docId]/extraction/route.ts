@@ -5,7 +5,7 @@ const BACKEND_URL = process.env.BACKEND_API_URL;
 
 export async function GET(
   request: NextRequest,
-  context: { params: { docId: string } },
+  context: { params: Promise<{ docId: string }> },
 ) {
   const { docId } = await context.params;
   if (!BACKEND_URL) {
@@ -53,7 +53,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  context: { params: { docId: string } },
+  context: { params: Promise<{ docId: string }> },
 ) {
   const { docId } = await context.params;
   if (!BACKEND_URL) {

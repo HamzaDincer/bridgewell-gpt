@@ -5,9 +5,9 @@ const BACKEND_URL = process.env.BACKEND_API_URL;
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { docId: string } },
+  context: { params: Promise<{ docId: string }> },
 ) {
-  const { docId } = await params;
+  const { docId } = await context.params;
   if (!BACKEND_URL) {
     console.error("BACKEND_API_URL environment variable is not set.");
     return NextResponse.json(

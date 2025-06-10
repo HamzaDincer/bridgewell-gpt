@@ -35,6 +35,7 @@ export function DocumentListView({
   onBack,
   isLoading,
   error,
+  onUpload,
 }: DocumentListViewProps) {
   const router = useRouter();
 
@@ -89,7 +90,7 @@ export function DocumentListView({
         <div className="flex items-center gap-2">
           {/* Placeholder for future More Options button */}
           {/* <Button variant="outline" size="icon"><MoreVertical className="h-4 w-4" /></Button> */}
-          <Button variant="outline">
+          <Button variant="outline" onClick={onUpload}>
             <Upload className="h-4 w-4 mr-2" /> Upload
           </Button>
           <Button variant="outline">

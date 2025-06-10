@@ -35,6 +35,7 @@ export interface DocumentListViewProps {
   onBack: () => void;
   isLoading?: boolean;
   error?: string | null;
+  onUpload?: () => void;
 }
 
 // From CreateDocumentTypeForm.tsx

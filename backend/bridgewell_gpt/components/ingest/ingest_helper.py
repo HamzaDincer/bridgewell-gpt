@@ -148,17 +148,12 @@ class IngestionHelper:
             if not file_path.exists():
                 raise FileNotFoundError(f"File not found: {file_path}")
                 
-            logger.info(f"Parsing file at path: {file_path}")
             parsed_docs = parse_documents([str(file_path)])
             
             if parsed_docs:
                 parsed_doc = parsed_docs[0]
-                logger.info(f"Got parsed document with {len(parsed_doc.chunks) if hasattr(parsed_doc, 'chunks') else 0} chunks")
                 documents = []
                 for chunk in parsed_doc.chunks:
-                    logger.info(f"Processing chunk: type={chunk.chunk_type if hasattr(chunk, 'chunk_type') else 'unknown'}, "
-                              f"text_length={len(chunk.text) if hasattr(chunk, 'text') else 0}, "
-                              f"grounding_count={len(chunk.grounding) if hasattr(chunk, 'grounding') else 0}")
                     doc = Document(
                         text=chunk.text,
                         metadata={
@@ -230,12 +225,15 @@ class IngestionHelper:
             # We don't want the Embeddings search to receive this metadata
             document.excluded_embed_metadata_keys = [
                 "doc_id", "file_path", "file_type", "file_size",
-                "page","bbox","raw_chunk","chunk_type","chunk_id",
+                "raw_chunk","chunk_type","chunk_id", 
+                "extraction", "extraction_id", "document_type",
+                "page_label", "page", "bbox",
                 "creation_date", "last_modified_date"
             ]
             # We don't want the LLM to receive these metadata in the context
             document.excluded_llm_metadata_keys = [
-                "file_name", "doc_id",  "page_label", "chunk_type", "chunk_id", "raw_chunk",
+                "file_name", "doc_id",  "page_label", "chunk_type", "chunk_id", 
+                "raw_chunk", "extraction", "extraction_id", "document_type",
                 "file_path", "file_type", "file_size",
                 "creation_date", "last_modified_date"
             ]

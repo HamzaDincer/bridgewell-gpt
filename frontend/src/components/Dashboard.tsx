@@ -41,15 +41,22 @@ import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 // Import the new workflow component
 import { CreateDocumentTypeWorkflow } from "@/components/dashboard/CreateDocumentTypeWorkflow";
 
+// Add viewMode type
+type ViewMode =
+  | "dashboard"
+  | "documentList"
+  | "fieldSetup"
+  | "dataTable"
+  | "createForm"
+  | "upload";
+
 // Renamed function to DashboardComponent to avoid conflict if needed, but keeping Dashboard for now
 export default function Dashboard() {
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([]);
   const [isLoadingTypes, setIsLoadingTypes] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<
-    "dashboard" | "createForm" | "documentList" | "fieldSetup" | "dataTable"
-  >("dashboard");
+  const [viewMode, setViewMode] = useState<ViewMode>("dashboard");
   const [selectedDocumentType, setSelectedDocumentType] = useState<
     string | null
   >(null);
@@ -185,6 +192,11 @@ export default function Dashboard() {
     }
   };
 
+  // Add handler for upload button
+  const handleUploadClick = () => {
+    setViewMode("upload");
+  };
+
   return (
     <div className="flex min-h-screen bg-background">
       <DashboardSidebar onNavigateToDashboard={navigateToDashboard} />
@@ -307,6 +319,11 @@ export default function Dashboard() {
                         <Button
                           variant="ghost"
                           className="flex-1 rounded-none h-12 gap-2 text-indigo-500"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDocumentType(docType.title);
+                            setViewMode("upload");
+                          }}
                         >
                           <Upload className="h-4 w-4" />
                           Upload
@@ -380,11 +397,12 @@ export default function Dashboard() {
               <div className="flex-1 p-6 overflow-auto">
                 {viewMode === "documentList" && (
                   <DocumentListView
+                    documentTypeName={selectedDocumentType}
                     documents={activeDocuments}
+                    onBack={navigateToDashboard}
                     isLoading={isLoadingTypes}
                     error={fetchError}
-                    documentTypeName={selectedDocumentType || ""}
-                    onBack={navigateToDashboard}
+                    onUpload={handleUploadClick}
                   />
                 )}
                 {viewMode === "fieldSetup" && (
@@ -401,11 +419,20 @@ export default function Dashboard() {
             </div>
           ) : null}
 
+          {viewMode === "upload" && selectedDocumentType && (
+            <CreateDocumentTypeWorkflow
+              initialDocumentTypeName={selectedDocumentType}
+              onSuccess={handleWorkflowSuccess}
+              onCancel={handleWorkflowCancel}
+            />
+          )}
+
           {viewMode !== "documentList" &&
             viewMode !== "fieldSetup" &&
             viewMode !== "dataTable" &&
             viewMode !== "createForm" &&
-            viewMode !== "dashboard" && (
+            viewMode !== "dashboard" &&
+            viewMode !== "upload" && (
               <div className="text-center text-muted-foreground py-10">
                 <p>
                   No content to display for the current view mode or an

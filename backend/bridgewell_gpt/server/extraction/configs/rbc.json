@@ -1,7 +1,7 @@
 {
   "company": "RBC",
   "benefit_headers": {
-    "life_insurance": {
+    "life_insurance_ad_d": {
       "headers": [
         "(?i)GROUP BASIC TERM LIFE INSURANCE EMPLOYEE BENEFIT SUMMARY"
       ],

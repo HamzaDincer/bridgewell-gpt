@@ -16,6 +16,7 @@ from bridgewell_gpt.components.vector_store.vector_store_component import (
 )
 from bridgewell_gpt.server.ingest.model import IngestedDoc
 from bridgewell_gpt.settings.settings import settings
+from bridgewell_gpt.server.chat.chat_service import ChatService
 
 if TYPE_CHECKING:
     from llama_index.core.storage.docstore.types import RefDocInfo
@@ -32,6 +33,7 @@ class IngestService:
         vector_store_component: VectorStoreComponent,
         embedding_component: EmbeddingComponent,
         node_store_component: NodeStoreComponent,
+        chat_service: ChatService,
     ) -> None:
         self.llm_service = llm_component
         self.storage_context = StorageContext.from_defaults(
@@ -40,12 +42,15 @@ class IngestService:
             index_store=node_store_component.index_store,
         )
         node_parser = SentenceWindowNodeParser.from_defaults()
+        self.chat_service = chat_service
 
         self.ingest_component = get_ingestion_component(
             self.storage_context,
             embed_model=embedding_component.embedding_model,
             transformations=[node_parser, embedding_component.embedding_model],
             settings=settings(),
+            ingest_service=self,
+            chat_service=self.chat_service,
         )
 
     def _ingest_data(self, file_name: str, file_data: AnyStr) -> list[IngestedDoc]:

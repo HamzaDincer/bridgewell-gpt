@@ -10,10 +10,10 @@ import shutil
 import json
 import logging
 import difflib
+import os
+import time
 
 from bridgewell_gpt.server.ingest.ingest_service import IngestService
-from bridgewell_gpt.server.ingest.model import IngestedDoc
-from bridgewell_gpt.settings.settings import settings
 from bridgewell_gpt.server.chat.chat_service import ChatService
 from bridgewell_gpt.open_ai.extensions.context_filter import ContextFilter
 from bridgewell_gpt.paths import local_data_path
@@ -51,6 +51,10 @@ class ExtractionService:
         # Set up storage directories
         self._storage_dir = local_data_path / "original_files"
         self._storage_dir.mkdir(parents=True, exist_ok=True)
+
+        self.llama_extract = LlamaExtract()
+        self.storage_path = local_data_path / "extraction_results"
+        self.storage_path.mkdir(parents=True, exist_ok=True)
 
     @property
     def storage_dir(self) -> Path:
@@ -241,22 +245,27 @@ class ExtractionService:
                     logger.info(f"Found prompts for section {parent}: {list(section_prompts.keys())}")
                 
                 for field in fields:
-                    # Get field-specific prompt from config
-                    field_info = section_prompts.get(field, {})
-                    field_prompt = field_info.get("prompt")
-                    field_examples = field_info.get("examples", [])
-            
-                    logger.info(f"Looking up field {field} in section {parent}")
-                    logger.info(f"Found prompt: {field_prompt}")
-                    logger.info(f"Found examples: {field_examples}")
+                    # Get field-specific prompt and examples from company config
+                    field_prompt = None
+                    field_examples = []
                     
-                    # Build the prompt
+                    if company_config and "benefit_headers" in company_config:
+                        # Find the matching section in benefit_headers
+                        for section_name, section_info in company_config["benefit_headers"].items():
+                            if parent in section_name.lower():
+                                if "fields" in section_info and field in section_info["fields"]:
+                                    field_info = section_info["fields"][field]
+                                    field_prompt = field_info.get("prompt")
+                                    field_examples = field_info.get("examples", [])
+                                    logger.info(f"\nFound config for {parent}.{field}:")
+                                    logger.info(f"  Prompt: {field_prompt}")
+                                    logger.info(f"  Examples: {field_examples}")
+                                break
+                    
                     if not field_prompt:
-                        # Generate a default prompt based on the field name
-                        field_display = field.replace('_', ' ')
-                        field_prompt = f"""Find the {field_display} in the document. Extract the exact value if found."""
+                        field_prompt = f"Find the {field} in the {parent} section"
+                        logger.info(f"\nUsing default prompt for {parent}.{field}: {field_prompt}")
                     
-                    # Add examples to the prompt if available
                     examples_text = ""
                     if field_examples:
                         examples_text = "\nExample values:\n" + "\n".join(f"- {ex}" for ex in field_examples)
@@ -265,19 +274,39 @@ class ExtractionService:
                         {field_prompt}
                         
                         Important:
-                        1. Only extract the specific value for this field.
-                        2. If the information is not explicitly stated in the text, respond with 'null'.
-                        3. Do not make assumptions or infer values.
-                        4. Return the value exactly as it appears in the document.
-                        5. Look for the information in any relevant section, including headers, bullet points, and tables.
-                        6. Consider variations in terminology (e.g., "second medical opinion" might be listed as "second opinion service" or "medical second opinion").
+                        1. Extract the following information:
+                           - The exact value from the document
+                           - The page number where the value was found (0-based)
+                           - The coordinates of the value on the page (if available)
+                           - The surrounding text or context where the value was found
+                        2. Return the information in this exact JSON format:
+                           {{
+                             "value": "extracted value",
+                             "page": page_number,
+                             "coordinates": {{
+                               "x": x_coordinate,
+                               "y": y_coordinate,
+                               "width": width,
+                               "height": height,
+                               "page": page_number
+                             }},
+                             "source_snippet": "surrounding text"
+                           }}
+                        3. If any piece of information is not available, use null for that field
+                        4. If the information is not found at all, return null
+                        5. Do not make assumptions or infer values
+                        6. Look for the information in any relevant section
                         {examples_text}
                     """
-            
+                    
+                    logger.info(f"\nFinal prompt for {parent}.{field}:")
+                    logger.info(prompt)
+                    
                     system_prompt = """
                         You are an AI assistant specialized in extracting specific insurance benefit details from documents.
-                        Your task is to find and extract exact values from the document text.
+                        Your task is to find and extract exact values and their locations from the document text.
                         Only return information that is explicitly stated in the document.
+                        You must return the information in the exact JSON format specified.
                         If you cannot find the specific information, respond with 'null'.
                         Do not include any explanations or additional text in your response.
                         Be thorough in your search - check all sections of the document as the information might be in unexpected places.
@@ -302,26 +331,75 @@ class ExtractionService:
                         )
                 
                         response_text = completion.response.strip() if completion.response else None
+                        # Safely get source text if available
+                        source_text = None
+                        try:
+                            if hasattr(completion, 'source_nodes') and completion.source_nodes:
+                                source_text = completion.source_nodes[0].text
+                        except (AttributeError, IndexError) as e:
+                            logger.debug(f"Could not get source text: {str(e)}")
                         
-                        # Clean up the response
-                        if not response_text or response_text.lower() in ['null', 'none', 'not found', 'not specified', 'not stated', 'empty response']:
-                            response_text = None
-                            logger.info(f"No value found for {parent}.{field}")
-                        else:
-                            # Remove quotes and normalize whitespace
-                            response_text = response_text.strip('"\'')
-                            response_text = ' '.join(response_text.split())
-                            logger.info(f"Found value for {parent}.{field}: {response_text}")
+                        logger.info(f"\nRAG response for {parent}.{field}:")
+                        logger.info(f"Response: {response_text}")
+                        logger.info(f"Source text: {source_text}")
                         
-                        # Store the result
-                        if parent:
-                            results[parent][field] = response_text
-                        else:
-                            results[field] = response_text
+                        # Clean up response text - remove markdown code block tags
+                        if response_text:
+                            # Remove ```json and ``` tags
+                            response_text = response_text.replace('```json', '').replace('```', '').strip()
+                            logger.info(f"Cleaned response: {response_text}")
                         
+                        # Parse the response as JSON if possible
+                        try:
+                            if response_text and response_text.lower() not in ['null', 'none', 'not found', 'not specified', 'not stated', 'empty response']:
+                                parsed_response = json.loads(response_text)
+                                if isinstance(parsed_response, dict):
+                                    # Store the result with full structure
+                                    if parent:
+                                        if parent not in results:
+                                            results[parent] = {}
+                                        results[parent][field] = parsed_response
+                                    else:
+                                        results[field] = parsed_response
+                                    logger.info(f"Found structured value for {parent}.{field}: {parsed_response}")
+                                else:
+                                    logger.warning(f"Response was not a dictionary: {response_text}")
+                            else:
+                                logger.info(f"No value found for {parent}.{field}")
+                                if parent:
+                                    if parent not in results:
+                                        results[parent] = {}
+                                    results[parent][field] = None
+                                else:
+                                    results[field] = None
+                        except json.JSONDecodeError:
+                            logger.warning(f"Could not parse response as JSON: {response_text}")
+                            # Fall back to simple value
+                            if response_text and response_text.lower() not in ['null', 'none', 'not found', 'not specified', 'not stated', 'empty response']:
+                                simple_result = {
+                                    "value": response_text,
+                                    "page": None,
+                                    "coordinates": None,
+                                    "source_snippet": source_text
+                                }
+                                if parent:
+                                    if parent not in results:
+                                        results[parent] = {}
+                                    results[parent][field] = simple_result
+                                else:
+                                    results[field] = simple_result
+                            else:
+                                if parent:
+                                    if parent not in results:
+                                        results[parent] = {}
+                                    results[parent][field] = None
+                                else:
+                                    results[field] = None
                     except Exception as e:
                         logger.error(f"RAG extraction failed for {parent}.{field}: {str(e)}")
                         if parent:
+                            if parent not in results:
+                                results[parent] = {}
                             results[parent][field] = None
                         else:
                             results[field] = None
@@ -448,7 +526,7 @@ class ExtractionService:
             
             # Extract data from the entire original PDF
             extraction_result = benefit_agent.extract(str(original_pdf_path))
-            logger.info("Successfully created new benefit-summary-parser agent")
+            logger.info("Successfully extracted initial data with benefit-summary-parser agent")
             initial_data = extraction_result.data
             
             # Check for missing fields and use RAG to fill them
@@ -459,7 +537,29 @@ class ExtractionService:
                 # Load company config if available
                 company_config = self._load_company_config(company_name)
                 
-                # Extract missing fields using RAG
+                # Wait for embeddings to finish before proceeding with RAG
+                logger.info("Waiting for embeddings to complete before RAG extraction")
+                ingested_docs = self._ingest_service.list_ingested()
+                doc_ids = [doc.doc_id for doc in ingested_docs if doc.doc_metadata.get('file_name') == file_name]
+                
+                if not doc_ids:
+                    logger.warning("No ingested documents found. Waiting for embeddings to complete...")
+                    # You might want to add a small delay or retry mechanism here
+                    max_retries = 5
+                    retry_delay = 2  # seconds
+                    
+                    for _ in range(max_retries):
+                        time.sleep(retry_delay)
+                        ingested_docs = self._ingest_service.list_ingested()
+                        doc_ids = [doc.doc_id for doc in ingested_docs if doc.doc_metadata.get('file_name') == file_name]
+                        if doc_ids:
+                            logger.info("Documents found after waiting for embeddings")
+                            break
+                    else:
+                        logger.error("Embeddings not completed after maximum retries")
+                        raise Exception("Embeddings not completed in time")
+                
+                # Extract missing fields using RAG with ingested document
                 rag_results = self._extract_with_rag(
                     file_name=file_name,
                     missing_fields=missing_fields,
@@ -477,11 +577,14 @@ class ExtractionService:
                     return d
                 
                 final_data = deep_update(initial_data, rag_results)
+                logger.info("Successfully merged RAG results with initial data")
             else:
+                logger.info("No missing fields found, using initial extraction data")
                 final_data = initial_data
+            
             # Create the comparison document
             template = BenefitComparisonTemplate()
-            output_path = template.fill(final_data)  # Changed from fill_template to fill
+            output_path = template.fill(final_data)
             
             logger.info(f"Successfully created benefit comparison at {output_path}")
             return output_path, final_data
@@ -492,4 +595,31 @@ class ExtractionService:
                 status_code=500,
                 detail=f"Failed to create benefit comparison: {str(e)}"
             )
+
+    def get_document_info(self, doc_id: str) -> Optional[Dict[str, Any]]:
+        """Get document information by ID.
+        
+        Args:
+            doc_id: Document ID
+            
+        Returns:
+            Dictionary containing document information or None if not found
+        """
+        # Look through all extraction results to find matching document
+        for extraction_id in os.listdir(self.storage_path):
+            extraction_dir = self.storage_path / extraction_id
+            if not extraction_dir.is_dir():
+                continue
+                
+            result_path = extraction_dir / "result.json"
+            if result_path.exists():
+                with open(result_path, "r") as f:
+                    result = json.load(f)
+                    if result.get("doc_id") == doc_id:
+                        return {
+                            "file_name": result.get("file_name"),
+                            "document_type": result.get("document_type"),
+                            "extraction_id": extraction_id
+                        }
+        return None
 

@@ -143,18 +143,22 @@ export function CreateDocumentTypeForm({
             // Poll for extraction status
             const checkExtractionStatus = async () => {
               try {
+                console.log("Checking extraction status for document:", docId);
                 const extractionResponse = await fetch(
                   `/api/v1/documents/${docId}/extraction`,
                 );
                 const data = await extractionResponse.json();
+                console.log("Extraction status check response:", data);
 
                 if (data.status === "completed") {
+                  // Mark as completed
                   updateUpload(uploadId, {
                     status: "completed",
                     progress: 100,
                   });
                   return true;
                 } else if (data.status === "error") {
+                  console.error("Extraction error:", data);
                   updateUpload(uploadId, {
                     status: "error",
                     error: data.message || "Processing failed",
@@ -234,18 +238,18 @@ export function CreateDocumentTypeForm({
         Back to Document Types
       </Button>
 
-      <h1 className="text-2xl font-semibold">Create document type</h1>
+      <h1 className="text-2xl font-semibold">Upload Document</h1>
 
       <div className="space-y-2">
         <Label htmlFor="docTypeName">
-          Name your document type <span className="text-red-500">*</span>
+          Document type <span className="text-red-500">*</span>
         </Label>
         <Input
           id="docTypeName"
           value={documentTypeName}
           onChange={(e) => setDocumentTypeName(e.target.value)}
           placeholder="E.g., Invoices, Receipts"
-          disabled={isLoading}
+          disabled={isLoading || !!initialDocumentTypeName}
         />
       </div>
 
@@ -354,7 +358,7 @@ export function CreateDocumentTypeForm({
           ) : (
             <ChevronLeft className="h-4 w-4 mr-2 -rotate-180" />
           )}
-          {isLoading ? "Processing..." : "Create document type"}
+          {isLoading ? "Processing..." : "Upload Document"}
         </Button>
       </div>
     </div>

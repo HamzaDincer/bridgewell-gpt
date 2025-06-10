@@ -9,6 +9,7 @@ from pathlib import Path
 from queue import Queue
 from typing import Any
 import uuid
+import json
 
 from llama_index.core.data_structs import IndexDict
 from llama_index.core.embeddings.utils import EmbedType
@@ -115,11 +116,16 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
         embed_model: EmbedType,
         transformations: list[TransformComponent],
         extraction_component: ExtractionComponent,
+        ingest_service: Any,  # Type hint as Any to avoid circular import
+        chat_service: Any = None,  # Add chat service parameter
         *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(storage_context, embed_model, transformations, *args, **kwargs)
         self.extraction_component = extraction_component
+        self._rag_thread_lock = threading.Lock()
+        self._ingest_service = ingest_service
+        self._chat_service = chat_service
 
     def ingest(self, file_name: str, file_data: Path) -> list[Document]:
         logger.info("Ingesting file_name=%s", file_name)
@@ -143,12 +149,14 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
 
         # Store extraction result in document metadata
         if extraction and extraction.get("status") == "completed":
+            logger.info(f"Initial extraction successful with ID: {extraction.get('extraction_id')}")
             for doc in documents:
                 if not doc.metadata:
                     doc.metadata = {}
                 doc.metadata["extraction"] = extraction.get("result", {})
                 doc.metadata["extraction_id"] = extraction.get("extraction_id")
                 doc.metadata["document_type"] = extraction.get("document_type")
+                logger.debug(f"Set extraction_id={doc.metadata['extraction_id']} for doc_id={doc.doc_id}")
 
         # Start background task for embedding and indexing
         self._background_save_docs(documents)
@@ -157,15 +165,143 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
         return documents
 
     def _background_save_docs(self, documents: list[Document]) -> None:
-        """Save documents to index in the background."""
+        """Save documents to index in the background and perform RAG extraction."""
         def save_task():
-            logger.debug("Saving the documents in the index and doc store")
-            with self._index_thread_lock:
-                for document in documents:
-                    self._index.insert(document)
-                logger.debug("Persisting the index and nodes")
-                self._save_index()
-                logger.debug("Persisted the index and nodes")
+            try:
+                logger.debug("Saving the documents in the index and doc store")
+                with self._index_thread_lock:
+                    for document in documents:
+                        self._index.insert(document)
+                        logger.debug(f"Inserted doc_id={document.doc_id} with extraction_id={document.metadata.get('extraction_id')}")
+                    logger.debug("Persisting the index and nodes")
+                    self._save_index()
+                    logger.debug("Persisted the index and nodes")
+
+                # After embeddings are complete, perform RAG extraction
+                logger.info("Starting RAG extraction after embeddings")
+                with self._rag_thread_lock:
+                    try:
+                        # Get the file name from the first document's metadata
+                        file_name = documents[0].metadata.get("file_name")
+                        if not file_name:
+                            logger.warning("No file name found in document metadata")
+                            return
+
+                        # Get the extraction result from metadata
+                        extraction_id = documents[0].metadata.get("extraction_id")
+                        logger.info(f"Retrieved extraction_id={extraction_id} from document metadata")
+                        if not extraction_id:
+                            logger.warning("No extraction ID found in document metadata")
+                            return
+
+                        # Get document type for company config
+                        document_type = documents[0].metadata.get("document_type")
+                        if not document_type:
+                            logger.warning("No document type found in document metadata")
+                            return
+
+                        # Load the extraction result file
+                        result_file = local_data_path / "extraction_results" / extraction_id / "result.json"
+                        logger.info(f"Looking for result file at: {result_file}")
+                        if not result_file.exists():
+                            logger.warning(f"Extraction result file not found: {result_file}")
+                            return
+
+                        with open(result_file) as f:
+                            extraction_data = json.load(f)
+
+                        extraction_result = extraction_data.get("result", {})
+                        if not extraction_result:
+                            logger.warning("No extraction result found in result file")
+                            return
+
+                        # Check for missing fields
+                        from bridgewell_gpt.server.extraction.extraction_service import ExtractionService
+                        from bridgewell_gpt.server.extraction.insurance_schema import InsuranceSummary
+                        
+                        # Initialize extraction service with both ingest and chat services
+                        extraction_service = ExtractionService(self._ingest_service, self._chat_service)
+                        missing_fields = extraction_service._has_missing_fields(extraction_result, InsuranceSummary)
+
+                        if missing_fields:
+                            logger.info(f"Found {len(missing_fields)} missing fields, using RAG to extract them")
+                            # Extract missing fields using RAG with company config
+                            company_config = extraction_service._load_company_config("rbc")  # Default to RBC config for now
+                            rag_results = extraction_service._extract_with_rag(
+                                file_name=file_name,
+                                missing_fields=missing_fields,
+                                company_config=company_config
+                            )
+
+                            # Log RAG results before updating
+                            logger.info("\n=== RAG Extraction Results Before Merging ===")
+                            try:
+                                if rag_results:
+                                    for section_name, section_data in rag_results.items():
+                                        logger.info(f"\nSection: {section_name}")
+                                        if not section_data:
+                                            logger.info("  No data found")
+                                            continue
+                                            
+                                        if isinstance(section_data, dict):
+                                            for field_name, field_data in section_data.items():
+                                                logger.info(f"\n  Field: {field_name}")
+                                                if field_data is None:
+                                                    logger.info("    Value: None")
+                                                else:
+                                                    try:
+                                                        # Pretty print the field data
+                                                        formatted_data = json.dumps(field_data, indent=4)
+                                                        # Add indentation to each line for better readability
+                                                        indented_data = "\n".join(f"    {line}" for line in formatted_data.split("\n"))
+                                                        logger.info(f"    Data:\n{indented_data}")
+                                                    except Exception as e:
+                                                        logger.info(f"    Raw Value: {field_data}")
+                                        else:
+                                            logger.info(f"  Raw Data: {section_data}")
+                                else:
+                                    logger.info("No RAG results found")
+                            except Exception as e:
+                                logger.error(f"Error logging RAG results: {str(e)}")
+                                logger.error(f"Raw RAG results: {rag_results}")
+
+                            # Update extraction result with RAG results
+                            def deep_update(d: dict, u: dict) -> dict:
+                                for k, v in u.items():
+                                    if isinstance(v, dict):
+                                        d[k] = deep_update(d.get(k, {}), v)
+                                    else:
+                                        if k in d and d[k] is None:  # Only update if original value is None
+                                            # Create a proper extraction field structure
+                                            if isinstance(v, dict) and all(key in v for key in ["value", "page", "coordinates", "source_snippet"]):
+                                                # If v already has the correct structure, use it as is
+                                                d[k] = v
+                                            else:
+                                                # Otherwise create the structure
+                                                d[k] = {
+                                                    "value": v.get("value", v) if isinstance(v, dict) else v,
+                                                    "page": v.get("page", None) if isinstance(v, dict) else None,
+                                                    "coordinates": v.get("coordinates", None) if isinstance(v, dict) else None,
+                                                    "source_snippet": v.get("source_snippet", None) if isinstance(v, dict) else None
+                                                }
+                                return d
+
+                            final_data = deep_update(extraction_result, rag_results)
+                            
+                            # Update the extraction result file
+                            extraction_data["result"] = final_data
+                            with open(result_file, 'w') as f:
+                                json.dump(extraction_data, f, indent=2)
+                                
+                            logger.info("Successfully updated extraction results with RAG data")
+                        else:
+                            logger.info("No missing fields found, skipping RAG extraction")
+
+                    except Exception as e:
+                        logger.error(f"Error during RAG extraction: {str(e)}")
+
+            except Exception as e:
+                logger.error(f"Error in save task: {str(e)}")
 
         import threading
         thread = threading.Thread(target=save_task)
@@ -530,6 +666,8 @@ def get_ingestion_component(
     embed_model: EmbedType,
     transformations: list[TransformComponent],
     settings: Settings,
+    ingest_service: Any = None,  # Type hint as Any to avoid circular import
+    chat_service: Any = None,  # Add chat service parameter
 ) -> BaseIngestComponent:
     """Get the ingestion component for the given configuration."""
     ingest_mode = settings.embedding.ingest_mode
@@ -560,4 +698,6 @@ def get_ingestion_component(
             embed_model=embed_model,
             transformations=transformations,
             extraction_component=ExtractionComponent(),
+            ingest_service=ingest_service,
+            chat_service=chat_service,
         )

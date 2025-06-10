@@ -68,6 +68,7 @@ class ExtractionComponent:
             
             # Create extraction ID
             extraction_id = str(uuid.uuid4())
+            logger.info(f"Generated new extraction_id: {extraction_id}")
             
             # Store chunks for future reference
             self._store_extraction_data(
@@ -118,6 +119,9 @@ class ExtractionComponent:
                     
                     # Store the successful result
                     result_path = self.storage_path / extraction_id / "result.json"
+                    logger.info(f"Storing extraction result at: {result_path}")
+                    result_path.parent.mkdir(parents=True, exist_ok=True)
+                    
                     with open(result_path, "w") as f:
                         json.dump({
                             "extraction_id": extraction_id,
@@ -127,6 +131,8 @@ class ExtractionComponent:
                             "result": result,
                             "timestamp": datetime.datetime.now().isoformat()
                         }, f, indent=2)
+                    
+                    logger.info(f"Successfully stored extraction result for ID: {extraction_id}")
                     
                     return {
                         "extraction_id": extraction_id,

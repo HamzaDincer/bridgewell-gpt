@@ -3,14 +3,14 @@ import type { NextRequest } from "next/server";
 
 const BACKEND_URL = process.env.BACKEND_API_URL;
 
-type RouteContext = {
+type Params = {
   params: {
     typeId: string;
   };
 };
 
-export async function GET(request: NextRequest, { params }: RouteContext) {
-  const { typeId } = params;
+export async function GET(request: NextRequest, context: Params) {
+  const { typeId } = context.params;
   if (!BACKEND_URL) {
     console.error("BACKEND_API_URL environment variable is not set.");
     return NextResponse.json(
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   }
 }
 
-export async function POST(request: NextRequest, { params }: RouteContext) {
+export async function POST(request: NextRequest, context: Params) {
   if (!BACKEND_URL) {
     console.error("BACKEND_API_URL environment variable is not set.");
     return NextResponse.json(
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   }
 
   try {
-    const targetUrl = `${BACKEND_URL}/v1/document-types/${params.typeId}/documents`;
+    const targetUrl = `${BACKEND_URL}/v1/document-types/${context.params.typeId}/documents`;
     const requestBody = await request.json();
     console.log(
       `(Proxy POST) Forwarding to: ${targetUrl} with body:`,

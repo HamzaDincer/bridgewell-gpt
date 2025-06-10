@@ -111,9 +111,8 @@ def get_document_by_id(doc_id: str, request: Request):
                 if extraction_result:
                     extraction = extraction_result.get("result", {})
                 
-                # Construct the PDF URL
-                backend_url = os.environ.get("BACKEND_API_URL", "http://localhost:8001")
-                url = f"{backend_url}/original_files/{file_name}"
+                # Construct the PDF URL using the request's base URL
+                url = str(request.base_url) + f"original_files/{file_name}"
                 
                 return {"url": url, "extraction": extraction}
     raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")

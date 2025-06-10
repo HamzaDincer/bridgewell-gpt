@@ -7,7 +7,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { typeId: string } },
 ) {
-  const { typeId } = await params;
+  const { typeId } = params;
   if (!BACKEND_URL) {
     console.error("BACKEND_API_URL environment variable is not set.");
     return NextResponse.json(

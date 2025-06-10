@@ -1,6 +1,7 @@
 // eslint.config.mjs
 import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
+import nextPlugin from "@next/eslint-plugin-next";
 
 export default tseslint.config(
   // Applies recommended rules from @eslint/js
@@ -8,6 +9,17 @@ export default tseslint.config(
 
   // Applies recommended rules from typescript-eslint
   ...tseslint.configs.recommended,
+
+  // Next.js plugin configuration
+  {
+    plugins: {
+      "@next/next": nextPlugin,
+    },
+    rules: {
+      ...nextPlugin.configs.recommended.rules,
+      "@next/next/no-html-link-for-pages": "off", // Turn off if you're using app directory
+    },
+  },
 
   // Optional: Add custom configurations or overrides below
   {

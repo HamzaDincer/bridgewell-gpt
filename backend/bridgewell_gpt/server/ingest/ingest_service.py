@@ -146,16 +146,14 @@ class IngestService:
 
             # Get all nodes for this document
             nodes = docstore.get_nodes(ref_doc_info.node_ids)
-            
             # Combine the text from all nodes
             text = "\n".join(node.get_content() for node in nodes)
-            
             return {
                 "text": text,
                 "metadata": IngestedDoc.curate_metadata(ref_doc_info.metadata) if ref_doc_info.metadata else None
             }
-        except ValueError:
-            logger.warning(f"Document {doc_id} not found", exc_info=True)
+        except Exception:
+            logger.warning(f"Document {doc_id} not found or error occurred", exc_info=True)
             return None
 
     def extract_benefit_pages(self, file_name: str, page_numbers: List[int]) -> Path:

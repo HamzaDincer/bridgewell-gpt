@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 from bridgewell_gpt.server.ingest.ingest_service import IngestService
 from bridgewell_gpt.server.ingest.model import IngestedDoc
 from bridgewell_gpt.server.utils.auth import authenticated
+from bridgewell_gpt.components.extraction.extraction_component import ExtractionComponent
+from bridgewell_gpt.components.ingest.ingest_helper import IngestionHelper
 
 ingest_router = APIRouter(prefix="/v1", dependencies=[Depends(authenticated)])
 
@@ -38,27 +40,26 @@ def ingest(request: Request, file: UploadFile) -> IngestResponse:
 
 
 @ingest_router.post("/ingest/file", tags=["Ingestion"])
-def ingest_file(request: Request, file: UploadFile) -> IngestResponse:
+def ingest_file(request: Request, file: UploadFile) -> dict:
     """Ingests and processes a file, storing its chunks to be used as context.
 
-    The context obtained from files is later used in
-    `/chat/completions`, `/completions`, and `/chunks` APIs.
-
-    Most common document
-    formats are supported, but you may be prompted to install an extra dependency to
-    manage a specific file type.
-
-    A file can generate different Documents (for example a PDF generates one Document
-    per page). All Documents IDs are returned in the response, together with the
-    extracted Metadata (which is later used to improve context retrieval). Those IDs
-    can be used to filter the context used to create responses in
-    `/chat/completions`, `/completions`, and `/chunks` APIs.
+    Returns immediately after starting background processing.
     """
     service = request.state.injector.get(IngestService)
     if file.filename is None:
         raise HTTPException(400, "No file name provided")
+    # Save the file and start background processing
     ingested_documents = service.ingest_bin_data(file.filename, file.file)
-    return IngestResponse(object="list", model="private-gpt", data=ingested_documents)
+    # Debug logging
+    print("DEBUG: ingested_documents =", ingested_documents)
+    doc_ids = [getattr(doc, 'doc_id', None) for doc in ingested_documents]
+    print("DEBUG: doc_ids =", doc_ids)
+    # Return document IDs and status immediately
+    return {
+        "status": "processing",
+        "doc_ids": doc_ids,
+        "message": "File received. Processing in background."
+    }
 
 
 @ingest_router.post("/ingest/text", tags=["Ingestion"])
@@ -121,3 +122,40 @@ def get_document(request: Request, doc_id: str) -> dict[str, Any]:
     if not doc:
         raise HTTPException(404, f"Document {doc_id} not found")
     return doc
+
+
+@ingest_router.get("/ingest/status/{doc_id}", tags=["Ingestion"])
+def get_ingest_status(request: Request, doc_id: str) -> dict:
+    """Get the processing status of a document by its ID.
+
+    Returns a detailed status: 'uploading', 'parsing', 'extraction', 'embedding', 'rag', 'completed'.
+    """
+    service = request.state.injector.get(IngestService)
+    extraction_component = ExtractionComponent()
+
+    # Check status file first
+    phase = IngestionHelper.read_status(doc_id)
+    if phase:
+        if phase == "completed":
+            return {"status": "completed", "phase": phase, "doc_id": doc_id}
+        else:
+            return {"status": "processing", "phase": phase, "doc_id": doc_id}
+
+    # Fallback to old logic if no status file
+    doc = service.get_document(doc_id)
+    if doc:
+        file_name = None
+        if doc.get("metadata"):
+            file_name = doc["metadata"].get("file_name")
+        if file_name:
+            extraction_result = extraction_component.get_latest_extraction_by_file(file_name)
+            if extraction_result:
+                if extraction_result.get("status") == "completed":
+                    return {"status": "completed", "phase": "completed", "doc_id": doc_id}
+                else:
+                    return {"status": "processing", "phase": extraction_result.get("status", "processing"), "doc_id": doc_id}
+            else:
+                return {"status": "processing", "phase": "embedding", "doc_id": doc_id}
+        else:
+            return {"status": "completed", "phase": "completed", "doc_id": doc_id}
+    return {"status": "processing", "phase": "uploading", "doc_id": doc_id}

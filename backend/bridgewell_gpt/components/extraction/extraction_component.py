@@ -60,7 +60,6 @@ class ExtractionComponent:
                 chunks.append(chunk)
 
             logger.info(f"Created {len(chunks)} chunks for extraction")
-            logger.info("First chunk sample: %s", json.dumps(chunks[0] if chunks else {}, indent=2))
 
             # Get agent name from settings if not provided
             if not agent_name:
@@ -82,9 +81,7 @@ class ExtractionComponent:
             content = {
                 "chunks": chunks
             }
-            
-            logger.info(f"Content: {json.dumps(content, indent=2)}")  # Use json.dumps for safe logging
-            
+                
             # Get the extraction agent
             try:
                 benefit_agent = self.llama_extract.get_agent("benefit-summary-parser")
@@ -100,14 +97,10 @@ class ExtractionComponent:
             with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
                 temp_path = temp_file.name
                 logger.info(f"Writing to temp file: {temp_path}")
-                json.dump(content, temp_file, indent=2)
+                # Write the content dictionary to the temp file
+                json.dump(content, temp_file)
                 temp_file.flush()  # Ensure content is written
-                
-                # Read back and log the contents to verify
-                with open(temp_path, 'r') as verify_file:
-                    file_contents = verify_file.read()
-                    logger.info(f"Temp file contents: {file_contents}")
-                
+
                 try:
                     # Perform extraction
                     logger.info(f"Starting extraction with agent on file: {temp_path}")

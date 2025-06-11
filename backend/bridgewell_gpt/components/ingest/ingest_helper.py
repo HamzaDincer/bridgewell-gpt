@@ -60,6 +60,9 @@ FILE_READER_CLS.update(
     }
 )
 
+status_dir = local_data_path / "status"
+status_dir.mkdir(parents=True, exist_ok=True)
+
 class IngestionHelper:
     """Helper class to transform a file into a list of documents.
 
@@ -87,9 +90,12 @@ class IngestionHelper:
         file_path = IngestionHelper.original_files_dir / file_name
         
         try:
-            # Copy the file preserving metadata
-            shutil.copy2(file_data, file_path)
-            logger.info(f"Successfully stored file at: {file_path}")
+            # Only copy if source and destination are different
+            if Path(file_data).resolve() != file_path.resolve():
+                shutil.copy2(file_data, file_path)
+                logger.info(f"Successfully stored file at: {file_path}")
+            else:
+                logger.info(f"Source and destination are the same file, skipping copy: {file_path}")
             return file_path
         except Exception as e:
             logger.error(f"Error storing file: {str(e)}")
@@ -237,3 +243,18 @@ class IngestionHelper:
                 "file_path", "file_type", "file_size",
                 "creation_date", "last_modified_date"
             ]
+
+    @staticmethod
+    def write_status(doc_id: str, phase: str) -> None:
+        status_path = status_dir / f"{doc_id}.json"
+        with open(status_path, "w") as f:
+            json.dump({"phase": phase}, f)
+
+    @staticmethod
+    def read_status(doc_id: str) -> str | None:
+        status_path = status_dir / f"{doc_id}.json"
+        if status_path.exists():
+            with open(status_path) as f:
+                data = json.load(f)
+                return data.get("phase")
+        return None

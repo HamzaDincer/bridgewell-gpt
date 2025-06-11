@@ -16,6 +16,7 @@ import {
 import { useDropzone, FileRejection } from "react-dropzone";
 import { cn } from "@/lib/utils";
 import { useUpload } from "@/contexts/UploadContext";
+import { toast } from "sonner";
 
 // Import CreateDocumentTypeFormProps from @/types
 import type { CreateDocumentTypeFormProps } from "@/types";
@@ -122,43 +123,40 @@ export function CreateDocumentTypeForm({
         const result = await response.json();
         console.log("Ingest successful:", result);
 
-        const docId = result?.data?.[0]?.doc_id;
+        // Show toast with backend's quick response message
+        if (result?.message) {
+          toast.success(result.message);
+        }
 
+        const docId = result?.doc_ids?.[0];
         if (!docId) {
           throw new Error("No document ID received from server");
         }
-
         // Navigate immediately after getting document ID
         onCreate(documentTypeName, acceptedFile, docId);
 
-        // Start background processing
+        // Start background status polling
         const processInBackground = async () => {
           try {
-            // Update to processing state
             updateUpload(uploadId, {
               status: "processing",
               progress: 50,
             });
 
-            // Poll for extraction status
-            const checkExtractionStatus = async () => {
+            const checkStatus = async () => {
               try {
-                console.log("Checking extraction status for document:", docId);
-                const extractionResponse = await fetch(
-                  `/api/v1/documents/${docId}/extraction`,
+                const statusResponse = await fetch(
+                  `/api/v1/ingest/status/${docId}`,
                 );
-                const data = await extractionResponse.json();
-                console.log("Extraction status check response:", data);
-
+                const data = await statusResponse.json();
+                console.log("Status check response:", data);
                 if (data.status === "completed") {
-                  // Mark as completed
                   updateUpload(uploadId, {
                     status: "completed",
                     progress: 100,
                   });
                   return true;
                 } else if (data.status === "error") {
-                  console.error("Extraction error:", data);
                   updateUpload(uploadId, {
                     status: "error",
                     error: data.message || "Processing failed",
@@ -167,20 +165,18 @@ export function CreateDocumentTypeForm({
                 }
                 return false;
               } catch (error) {
-                console.error("Error checking extraction status:", error);
+                console.error("Error checking status:", error);
                 return false;
               }
             };
 
-            // Poll every 2 seconds until complete
             const pollInterval = setInterval(async () => {
-              const isComplete = await checkExtractionStatus();
+              const isComplete = await checkStatus();
               if (isComplete) {
                 clearInterval(pollInterval);
               }
             }, 2000);
 
-            // Set a timeout to stop polling after 5 minutes
             setTimeout(() => {
               clearInterval(pollInterval);
               updateUpload(uploadId, {
@@ -197,8 +193,6 @@ export function CreateDocumentTypeForm({
             });
           }
         };
-
-        // Start background processing without awaiting
         processInBackground();
       } catch (fetchError) {
         if (fetchError instanceof Error) {

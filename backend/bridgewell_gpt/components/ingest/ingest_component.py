@@ -129,47 +129,54 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
 
     def ingest(self, file_name: str, file_data: Path) -> list[Document]:
         logger.info("Ingesting file_name=%s", file_name)
-        documents = IngestionHelper.transform_file_into_documents(file_name, file_data)
-        logger.info(
-            "Transformed file=%s into count=%s documents", file_name, len(documents)
-        )
-        
-        # Generate document IDs before extraction
-        for doc in documents:
-            if not doc.doc_id:
-                doc.doc_id = str(uuid.uuid4())
-            if not doc.metadata:
-                doc.metadata = {}
-            doc.metadata["file_name"] = file_name
-            doc.metadata["doc_id"] = doc.doc_id
+        stored_file_path = IngestionHelper.store_original_file(file_name, file_data)
+        import uuid
+        doc_id = str(uuid.uuid4())
+        # Return a stub Document object for compatibility
+        doc = Document(text="", metadata={"file_name": file_name, "doc_id": doc_id})
+        doc.doc_id = doc_id  # Explicitly set the attribute
+        self._background_save_docs(file_name, stored_file_path, doc_id)
+        return [doc]
 
-        # Extract the document using the injected component
-        extraction = self.extraction_component.extract_document(documents, "Benefit", file_name)
-        logger.info(f"Extraction: {extraction}")
-
-        # Store extraction result in document metadata
-        if extraction and extraction.get("status") == "completed":
-            logger.info(f"Initial extraction successful with ID: {extraction.get('extraction_id')}")
-            for doc in documents:
-                if not doc.metadata:
-                    doc.metadata = {}
-                doc.metadata["extraction"] = extraction.get("result", {})
-                doc.metadata["extraction_id"] = extraction.get("extraction_id")
-                doc.metadata["document_type"] = extraction.get("document_type")
-                logger.debug(f"Set extraction_id={doc.metadata['extraction_id']} for doc_id={doc.doc_id}")
-
-        # Start background task for embedding and indexing
-        self._background_save_docs(documents)
-
-        # Return documents with IDs immediately
-        return documents
-
-    def _background_save_docs(self, documents: list[Document]) -> None:
+    def _background_save_docs(self, file_name: str, stored_file_path: Path, doc_id: str) -> None:
         """Save documents to index in the background and perform RAG extraction."""
         def save_task():
             try:
+                # Write status: parsing
+                IngestionHelper.write_status(doc_id, "parsing")
                 logger.debug("Saving the documents in the index and doc store")
                 with self._index_thread_lock:
+                    documents = IngestionHelper.transform_file_into_documents(file_name, stored_file_path)
+                    logger.info(
+                        "Transformed file=%s into count=%s documents", file_name, len(documents)
+                    )
+                    # Write status: extraction
+                    IngestionHelper.write_status(doc_id, "extraction")
+                    # Generate document IDs before extraction
+                    for doc in documents:
+                        doc.doc_id = doc_id
+                        if not doc.metadata:
+                            doc.metadata = {}
+                        doc.metadata["file_name"] = file_name
+                        doc.metadata["doc_id"] = doc_id
+
+                    # Extract the document using the injected component
+                    extraction = self.extraction_component.extract_document(documents, "Benefit", file_name)
+                    logger.info(f"Extraction: {extraction}")
+
+                    # Write status: embedding
+                    IngestionHelper.write_status(doc_id, "embedding")
+                    # Store extraction result in document metadata
+                    if extraction and extraction.get("status") == "completed":
+                        logger.info(f"Initial extraction successful with ID: {extraction.get('extraction_id')}")
+                        for doc in documents:
+                            if not doc.metadata:
+                                doc.metadata = {}
+                            doc.metadata["extraction"] = extraction.get("result", {})
+                            doc.metadata["extraction_id"] = extraction.get("extraction_id")
+                            doc.metadata["document_type"] = extraction.get("document_type")
+                            logger.debug(f"Set extraction_id={doc.metadata['extraction_id']} for doc_id={doc.doc_id}")
+
                     for document in documents:
                         self._index.insert(document)
                         logger.debug(f"Inserted doc_id={document.doc_id} with extraction_id={document.metadata.get('extraction_id')}")
@@ -179,11 +186,12 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
 
                 # After embeddings are complete, perform RAG extraction
                 logger.info("Starting RAG extraction after embeddings")
+                IngestionHelper.write_status(doc_id, "rag")
                 with self._rag_thread_lock:
                     try:
                         # Get the file name from the first document's metadata
-                        file_name = documents[0].metadata.get("file_name")
-                        if not file_name:
+                        doc_file_name = documents[0].metadata.get("file_name")
+                        if not doc_file_name:
                             logger.warning("No file name found in document metadata")
                             return
 
@@ -228,7 +236,7 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                             # Extract missing fields using RAG with company config
                             company_config = extraction_service._load_company_config("rbc")  # Default to RBC config for now
                             rag_results = extraction_service._extract_with_rag(
-                                file_name=file_name,
+                                file_name=doc_file_name,
                                 missing_fields=missing_fields,
                                 company_config=company_config
                             )
@@ -297,11 +305,14 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                         else:
                             logger.info("No missing fields found, skipping RAG extraction")
 
+                        # After RAG (or if skipped), mark as completed
+                        IngestionHelper.write_status(doc_id, "completed")
                     except Exception as e:
                         logger.error(f"Error during RAG extraction: {str(e)}")
-
+                        IngestionHelper.write_status(doc_id, "completed")
             except Exception as e:
                 logger.error(f"Error in save task: {str(e)}")
+                IngestionHelper.write_status(doc_id, "completed")
 
         import threading
         thread = threading.Thread(target=save_task)

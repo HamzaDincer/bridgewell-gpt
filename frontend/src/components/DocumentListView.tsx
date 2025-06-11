@@ -197,37 +197,60 @@ export function DocumentListView({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {documents.map((doc) => (
-              <TableRow
-                key={doc.id}
-                className="cursor-pointer hover:bg-indigo-50 transition-colors"
-                style={{ textDecoration: "none" }}
-                onClick={() => router.push(`/documents/${doc.id}`)}
-              >
-                <TableCell>
-                  <Checkbox />
-                </TableCell>
-                <TableCell className="font-medium">{doc.name}</TableCell>
-                <TableCell>
-                  {/* Example Status Button - make dynamic */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-blue-300 text-blue-600 bg-blue-50 hover:bg-blue-100"
-                  >
-                    {doc.status}
-                  </Button>
-                </TableCell>
-                <TableCell>
-                  <div>{doc.uploadedBy}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {doc.uploadType}
-                  </div>
-                </TableCell>
-                <TableCell>{doc.dateModified}</TableCell>
-                <TableCell>{doc.dateAdded}</TableCell>
-              </TableRow>
-            ))}
+            {documents.map((doc) => {
+              const isBlocked = ![
+                "extraction",
+                "embedding",
+                "rag",
+                "completed",
+              ].includes(doc.phase || "");
+              return (
+                <TableRow
+                  key={doc.id}
+                  className={`transition-colors ${
+                    isBlocked
+                      ? "opacity-60 cursor-not-allowed"
+                      : "cursor-pointer hover:bg-indigo-50"
+                  }`}
+                  style={{ textDecoration: "none" }}
+                  onClick={() => {
+                    if (!isBlocked) router.push(`/documents/${doc.id}`);
+                  }}
+                  title={
+                    isBlocked
+                      ? `Processing: ${
+                          doc.phase || doc.status
+                        }. You can view the document when extraction is complete.`
+                      : undefined
+                  }
+                >
+                  <TableCell>
+                    <Checkbox disabled={isBlocked} />
+                  </TableCell>
+                  <TableCell className="font-medium">{doc.name}</TableCell>
+                  <TableCell>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`border-blue-300 text-blue-600 bg-blue-50 hover:bg-blue-100 ${
+                        isBlocked ? "pointer-events-none" : ""
+                      }`}
+                    >
+                      {doc.status}
+                      {isBlocked && doc.phase ? ` (${doc.phase})` : ""}
+                    </Button>
+                  </TableCell>
+                  <TableCell>
+                    <div>{doc.uploadedBy}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {doc.uploadType}
+                    </div>
+                  </TableCell>
+                  <TableCell>{doc.dateModified}</TableCell>
+                  <TableCell>{doc.dateAdded}</TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>

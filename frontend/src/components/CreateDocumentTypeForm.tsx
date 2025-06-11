@@ -140,7 +140,7 @@ export function CreateDocumentTypeForm({
           try {
             updateUpload(uploadId, {
               status: "processing",
-              progress: 50,
+              progress: 10,
             });
 
             const checkStatus = async () => {
@@ -150,11 +150,26 @@ export function CreateDocumentTypeForm({
                 );
                 const data = await statusResponse.json();
                 console.log("Status check response:", data);
-                if (data.status === "completed") {
-                  updateUpload(uploadId, {
-                    status: "completed",
-                    progress: 100,
+                // Update upload with phase and granular progress
+                let progress;
+                if (data.phase === "parsing") progress = 30;
+                else if (data.phase === "extraction") progress = 50;
+                else if (data.phase === "embedding") progress = 70;
+                else if (data.phase === "rag") progress = 90;
+                else if (data.phase === "completed") progress = 100;
+                updateUpload(uploadId, {
+                  status:
+                    data.status === "completed" ? "completed" : "processing",
+                  progress,
+                  phase: data.phase,
+                });
+                // Show toast as soon as extraction is done (phase is extraction or later)
+                if (["embedding", "rag", "completed"].includes(data.phase)) {
+                  toast.success("Document is ready! You can now view it.", {
+                    position: "top-right",
                   });
+                }
+                if (data.status === "completed") {
                   return true;
                 } else if (data.status === "error") {
                   updateUpload(uploadId, {

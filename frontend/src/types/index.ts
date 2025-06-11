@@ -7,6 +7,7 @@ export interface Document {
   uploadType: string;
   dateModified: string;
   dateAdded: string;
+  phase?: string; // Add phase for granular status
 }
 
 // Define DocumentType interface based on usage in the Card

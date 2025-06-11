@@ -9,6 +9,7 @@ export interface UploadInfo {
   status: UploadStatus;
   progress?: number;
   error?: string;
+  phase?: string;
 }
 
 interface UploadProgressProps {
@@ -57,9 +58,18 @@ export function UploadProgress({ uploads, onDismiss }: UploadProgressProps) {
             </div>
 
             <p className="mt-1 text-sm text-gray-500">
-              {upload.status === "uploading" && "Uploading..."}
-              {upload.status === "processing" && "Processing document..."}
-              {upload.status === "completed" && "Upload complete"}
+              {upload.status === "uploading" &&
+                (upload.phase === "uploading" || !upload.phase) &&
+                "Uploading..."}
+              {upload.phase === "parsing" && "Parsing document..."}
+              {upload.phase === "extraction" && "Extracting fields..."}
+              {upload.phase === "embedding" && "Generating embeddings..."}
+              {upload.phase === "rag" && "Post-processing (RAG)..."}
+              {upload.status === "processing" &&
+                (!upload.phase || upload.phase === "processing") &&
+                "Processing document..."}
+              {upload.status === "completed" &&
+                "Upload complete. You can now view the document."}
               {upload.status === "error" && (upload.error || "Upload failed")}
             </p>
 

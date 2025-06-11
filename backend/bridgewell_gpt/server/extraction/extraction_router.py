@@ -6,10 +6,12 @@ from dotenv import load_dotenv
 from pathlib import Path
 import logging
 import json
+from fastapi.responses import FileResponse
 
 from bridgewell_gpt.server.extraction.extraction_service import ExtractionService
 from bridgewell_gpt.server.extraction.insurance_schema import InsuranceSummary
 from bridgewell_gpt.server.utils.auth import authenticated
+from bridgewell_gpt.server.extraction.template_service import BenefitComparisonTemplate
 
 extraction_router = APIRouter(prefix="/v1", dependencies=[Depends(authenticated)])
 
@@ -22,6 +24,9 @@ load_dotenv()
 
 # Initialize LlamaExtract client
 extractor = LlamaExtract()
+
+# Make sure template_service is available
+template_service = BenefitComparisonTemplate()
 
 class ExtractPagesRequest(BaseModel):
     page_numbers: List[int] = Field(description="List of page numbers to extract (1-based indexing)")
@@ -192,3 +197,13 @@ async def create_benefit_comparison(
             status_code=500,
             detail=f"Failed to create benefit comparison: {str(e)}"
         )
+
+@extraction_router.post("/export_excel")
+async def export_excel(request: Request):
+    data = await request.json()
+    output_path = template_service.fill(data)
+    return FileResponse(
+        str(output_path),
+        filename="benefit_comparison.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )

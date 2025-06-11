@@ -6,7 +6,7 @@ set -e
 # Configuration
 DOCKER_USERNAME="hamzadincer"  # Your Docker Hub username
 IMAGE_NAME="bridgewell-gpt"
-IMAGE_TAG="test"
+IMAGE_TAG="0.0.2"
 
 # Full image name
 FULL_IMAGE_NAME="$DOCKER_USERNAME/$IMAGE_NAME:$IMAGE_TAG"

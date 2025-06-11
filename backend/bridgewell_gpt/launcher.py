@@ -22,6 +22,7 @@ from bridgewell_gpt.server.recipes.summarize.summarize_router import summarize_r
 from bridgewell_gpt.server.extraction.extraction_router import extraction_router
 from bridgewell_gpt.server.document_types.document_type_router import document_type_router
 from bridgewell_gpt.settings.settings import Settings
+from bridgewell_gpt.server.utils.cors_staticfiles import CORSAwareStaticFiles
 
 logger = logging.getLogger(__name__)
 
@@ -41,14 +42,8 @@ def create_app(root_injector: Injector) -> FastAPI:
     app.include_router(summarize_router)
     app.include_router(embeddings_router)
     app.include_router(health_router)
-    
-    logger.info("Attempting to include extraction_router")
     app.include_router(extraction_router)
-    logger.info("Successfully included extraction_router")
-    
-    logger.info("Attempting to include document_type_router")
     app.include_router(document_type_router)
-    logger.info("Successfully included document_type_router")
 
     # Expose original_files as static files
     original_files_path = os.path.abspath(
@@ -60,7 +55,7 @@ def create_app(root_injector: Injector) -> FastAPI:
     os.makedirs(original_files_path, exist_ok=True)
     app.mount(
         "/original_files",
-        StaticFiles(directory=original_files_path),
+        CORSAwareStaticFiles(directory=original_files_path),
         name="original_files"
     )
 

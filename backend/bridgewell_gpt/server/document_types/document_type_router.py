@@ -111,8 +111,10 @@ def get_document_by_id(doc_id: str, request: Request):
                 if extraction_result:
                     extraction = extraction_result.get("result", {})
                 
-                # Construct the PDF URL using the request's base URL
-                url = str(request.base_url) + f"original_files/{file_name}"
+                # Use x-forwarded-proto and host headers to construct the correct URL
+                scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+                host = request.headers.get("host", request.url.hostname)
+                url = f"{scheme}://{host}/original_files/{file_name}"
                 
                 return {"url": url, "extraction": extraction}
     raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")

@@ -157,7 +157,9 @@ class BenefitComparisonTemplate:
                     for field, cell in fields.items():
                         if field in section_data:
                             value = section_data[field]
-                            # Convert None or non-string values to string
+                            # If value is a dict with a 'value' key, use that
+                            if isinstance(value, dict) and "value" in value:
+                                value = value["value"]
                             value = "" if value is None else str(value).strip()
                             
                             try:

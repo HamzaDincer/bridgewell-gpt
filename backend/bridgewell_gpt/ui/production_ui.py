@@ -18,6 +18,7 @@ from bridgewell_gpt.server.ingest.ingest_service import IngestService
 from bridgewell_gpt.server.extraction.extraction_service import ExtractionService
 from bridgewell_gpt.settings.settings import settings
 from bridgewell_gpt.ui.images import logo_svg
+from bridgewell_gpt.paths import local_data_path
 
 logger = logging.getLogger(__name__)
 
@@ -37,24 +38,16 @@ class ExtractionStatus(BaseModel):
 
 def setup_ui_directories() -> None:
     """Create necessary directories for the UI if they don't exist."""
-    ui_settings = settings().ui
-    
-    # Create output directory
-    output_dir = Path(ui_settings.output_directory)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Created output directory: {output_dir}")
-    
-    # Create template directory
-    template_dir = Path(ui_settings.template_directory)
+    # Use the settings-based local_data_path
+    template_dir = local_data_path / "templates"
     template_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Created template directory: {template_dir}")
-    
+
     # Check if template file exists
     template_file = template_dir / "benefit_comparison_template.xlsx"
     if not template_file.exists():
         logger.warning(f"Template file not found at: {template_file}")
         logger.warning("Please place the benefit comparison template Excel file in the template directory.")
-
 
 @singleton
 class ProductionUI:

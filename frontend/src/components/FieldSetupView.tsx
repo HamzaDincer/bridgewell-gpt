@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PlusCircle, Trash2 } from "lucide-react";
+import { BENEFIT_FIELDS } from "@/constants/benefitFields";
 
 // Mock initial fields - in a real app, these would come from a backend
 const getMockFields = (docTypeName: string | null): Field[] => {
@@ -68,6 +69,9 @@ export function FieldSetupView({ documentTypeName }: FieldSetupViewProps) {
   const [newFieldType, setNewFieldType] = useState<FieldType>("text");
   const [newFieldIsRequired, setNewFieldIsRequired] = useState(false);
   const [newFieldOptions, setNewFieldOptions] = useState(""); // For select type, comma-separated
+  const [formState, setFormState] = useState<
+    Record<string, Record<string, string>>
+  >({});
 
   const handleAddField = () => {
     if (!newFieldName.trim()) {
@@ -227,6 +231,31 @@ export function FieldSetupView({ documentTypeName }: FieldSetupViewProps) {
             </TableBody>
           </Table>
         )}
+      </div>
+
+      <div>
+        {Object.entries(BENEFIT_FIELDS).map(([section, fields]) => (
+          <div key={section} className="mb-6">
+            <h3 className="font-bold mb-2">
+              {section.replace(/_/g, " ").toUpperCase()}
+            </h3>
+            {fields.map((field) => (
+              <div key={field} className="mb-2 flex items-center">
+                <label className="w-48">{field.replace(/_/g, " ")}</label>
+                <input
+                  className="border rounded px-2 py-1 flex-1"
+                  value={formState[section]?.[field] || ""}
+                  onChange={(e) =>
+                    setFormState((prev) => ({
+                      ...prev,
+                      [section]: { ...prev[section], [field]: e.target.value },
+                    }))
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
     </div>
   );

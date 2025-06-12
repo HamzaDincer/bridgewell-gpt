@@ -103,9 +103,9 @@ class DocumentTypeService:
         type_data = next((item for item in data if item['id'] == type_id), None)
         if not type_data:
             raise ValueError(f"Document type with ID {type_id} not found")
-        # Prevent duplicate documents by id or name
-        if any(doc['id'] == document.doc_id or doc['name'] == document.doc_name for doc in type_data['documents']):
-            logger.warning(f"Document with id={document.doc_id} or name={document.doc_name} already exists in type {type_id}, skipping append.")
+        # Prevent duplicate documents by id only
+        if any(doc['id'] == document.doc_id for doc in type_data['documents']):
+            logger.warning(f"Document with id={document.doc_id} already exists in type {type_id}, skipping append.")
             return DocumentTypeResponse(**type_data)
         # Create new document entry with initial phase
         new_doc = {

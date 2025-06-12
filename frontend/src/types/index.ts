@@ -2,7 +2,6 @@
 export interface Document {
   id: string;
   name: string;
-  status: string;
   uploadedBy: string;
   uploadType: string;
   dateModified: string;
@@ -25,8 +24,8 @@ export interface DocumentType {
 export interface ApiDocument {
   id: string;
   name: string;
-  status: string;
   date_added: string;
+  phase?: string;
 }
 
 // From DocumentListView.tsx

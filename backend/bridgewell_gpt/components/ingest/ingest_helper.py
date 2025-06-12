@@ -13,6 +13,7 @@ from llama_index.core.schema import Document
 from agentic_doc.parse import parse_documents
 from bridgewell_gpt.components.extraction.extraction_component import ExtractionComponent
 from bridgewell_gpt.paths import local_data_path
+from bridgewell_gpt.server.document_types.document_type_service import DocumentTypeService
 
 logger = logging.getLogger(__name__)
 
@@ -246,15 +247,10 @@ class IngestionHelper:
 
     @staticmethod
     def write_status(doc_id: str, phase: str) -> None:
-        status_path = status_dir / f"{doc_id}.json"
-        with open(status_path, "w") as f:
-            json.dump({"phase": phase}, f)
+        # No-op: phase update is now handled in the background ingestion component to avoid circular import
+        pass
 
     @staticmethod
     def read_status(doc_id: str) -> str | None:
-        status_path = status_dir / f"{doc_id}.json"
-        if status_path.exists():
-            with open(status_path) as f:
-                data = json.load(f)
-                return data.get("phase")
+        # No longer used; phase is now stored in document_types.json
         return None

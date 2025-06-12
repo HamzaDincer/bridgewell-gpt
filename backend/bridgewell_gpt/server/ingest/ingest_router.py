@@ -8,6 +8,7 @@ from bridgewell_gpt.server.ingest.model import IngestedDoc
 from bridgewell_gpt.server.utils.auth import authenticated
 from bridgewell_gpt.components.extraction.extraction_component import ExtractionComponent
 from bridgewell_gpt.components.ingest.ingest_helper import IngestionHelper
+from bridgewell_gpt.server.document_types.document_type_service import DocumentTypeService
 
 ingest_router = APIRouter(prefix="/v1", dependencies=[Depends(authenticated)])
 
@@ -130,32 +131,17 @@ def get_ingest_status(request: Request, doc_id: str) -> dict:
 
     Returns a detailed status: 'uploading', 'parsing', 'extraction', 'embedding', 'rag', 'completed'.
     """
-    service = request.state.injector.get(IngestService)
-    extraction_component = ExtractionComponent()
-
-    # Check status file first
-    phase = IngestionHelper.read_status(doc_id)
-    if phase:
-        if phase == "completed":
-            return {"status": "completed", "phase": phase, "doc_id": doc_id}
-        else:
-            return {"status": "processing", "phase": phase, "doc_id": doc_id}
-
-    # Fallback to old logic if no status file
-    doc = service.get_document(doc_id)
-    if doc:
-        file_name = None
-        if doc.get("metadata"):
-            file_name = doc["metadata"].get("file_name")
-        if file_name:
-            extraction_result = extraction_component.get_latest_extraction_by_file(file_name)
-            if extraction_result:
-                if extraction_result.get("status") == "completed":
-                    return {"status": "completed", "phase": "completed", "doc_id": doc_id}
+    # Use DocumentTypeService to get the phase
+    service = request.state.injector.get(DocumentTypeService)
+    # Search all document types for the document
+    for doc_type in service.get_document_types():
+        for doc in getattr(doc_type, "documents", []):
+            if str(doc.id) == str(doc_id):
+                phase = getattr(doc, "phase", None)
+                if phase == "completed":
+                    return {"status": "completed", "phase": phase, "doc_id": doc_id}
+                elif phase:
+                    return {"status": "processing", "phase": phase, "doc_id": doc_id}
                 else:
-                    return {"status": "processing", "phase": extraction_result.get("status", "processing"), "doc_id": doc_id}
-            else:
-                return {"status": "processing", "phase": "embedding", "doc_id": doc_id}
-        else:
-            return {"status": "completed", "phase": "completed", "doc_id": doc_id}
+                    return {"status": "processing", "phase": "uploading", "doc_id": doc_id}
     return {"status": "processing", "phase": "uploading", "doc_id": doc_id}

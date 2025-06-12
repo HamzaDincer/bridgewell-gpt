@@ -16,7 +16,12 @@ export function CreateDocumentTypeWorkflow({
   initialDocumentTypeName,
   onSuccess,
   onCancel,
-}: CreateDocumentTypeWorkflowProps) {
+  documentTypes = [],
+  setDocumentTypes = () => {},
+}: CreateDocumentTypeWorkflowProps & {
+  documentTypes?: DocumentType[];
+  setDocumentTypes?: (types: DocumentType[]) => void;
+}) {
   const [isLoadingWorkflow, setIsLoadingWorkflow] = useState(false);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
 
@@ -45,42 +50,6 @@ export function CreateDocumentTypeWorkflow({
     );
     setIsLoadingWorkflow(true);
     setWorkflowError(null);
-
-    // Create a temporary document type and navigate immediately
-    const tempDocType: DocumentType = {
-      id: docId, // Use docId temporarily
-      title: typeName,
-      uploaded: 1,
-      reviewPending: 0,
-      approved: 0,
-      documents: [
-        {
-          id: docId,
-          name: file.name,
-          status: "processing",
-          date_added: new Date().toISOString(),
-        },
-      ],
-    };
-
-    // Navigate immediately with temporary data
-    onSuccess(tempDocType, [
-      {
-        id: docId,
-        name: file.name,
-        status: "processing",
-        uploadedBy: "System",
-        uploadType: "Direct Upload",
-        dateModified: new Date().toLocaleString("en-US", {
-          dateStyle: "medium",
-          timeStyle: "short",
-        }),
-        dateAdded: new Date().toLocaleString("en-US", {
-          dateStyle: "medium",
-          timeStyle: "short",
-        }),
-      },
-    ]);
 
     // Continue with API calls in the background
     try {
@@ -146,7 +115,6 @@ export function CreateDocumentTypeWorkflow({
           (doc: ApiDocument) => ({
             id: doc.id,
             name: doc.name,
-            status: doc.status,
             uploadedBy: "System",
             uploadType: "Direct Upload",
             dateModified: new Date(doc.date_added).toLocaleString("en-US", {
@@ -195,6 +163,8 @@ export function CreateDocumentTypeWorkflow({
         initialDocumentTypeName={initialDocumentTypeName}
         onCreate={handleFormSubmit} // The form now calls our workflow orchestrator
         onNavigateBack={onCancel} // if user cancels from the form itself
+        documentTypes={documentTypes}
+        setDocumentTypes={setDocumentTypes}
       />
       {workflowError && (
         <div className="mt-4 p-4 bg-destructive/10 border border-destructive text-destructive rounded-md text-center">

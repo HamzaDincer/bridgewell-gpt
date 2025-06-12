@@ -22,7 +22,6 @@ import {
   FileText,
   SkipForward,
   CheckCheck,
-  Loader2, // Added Loader2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -33,20 +32,11 @@ export function DocumentListView({
   documentTypeName,
   documents,
   onBack,
-  isLoading,
+
   error,
   onUpload,
 }: DocumentListViewProps) {
   const router = useRouter();
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-        <Loader2 className="h-10 w-10 animate-spin mb-4 text-indigo-600" />
-        <p className="text-lg">Loading documents...</p>
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -198,12 +188,10 @@ export function DocumentListView({
           </TableHeader>
           <TableBody>
             {documents.map((doc) => {
-              const isBlocked = ![
-                "extraction",
-                "embedding",
-                "rag",
-                "completed",
-              ].includes(doc.phase || "");
+              const phase = doc.phase;
+              const isBlocked = !["embedding", "rag", "completed"].includes(
+                phase || "",
+              );
               return (
                 <TableRow
                   key={doc.id}
@@ -219,7 +207,7 @@ export function DocumentListView({
                   title={
                     isBlocked
                       ? `Processing: ${
-                          doc.phase || doc.status
+                          phase || doc.phase
                         }. You can view the document when extraction is complete.`
                       : undefined
                   }
@@ -236,8 +224,9 @@ export function DocumentListView({
                         isBlocked ? "pointer-events-none" : ""
                       }`}
                     >
-                      {doc.status}
-                      {isBlocked && doc.phase ? ` (${doc.phase})` : ""}
+                      {phase
+                        ? phase.charAt(0).toUpperCase() + phase.slice(1)
+                        : "Unknown"}
                     </Button>
                   </TableCell>
                   <TableCell>

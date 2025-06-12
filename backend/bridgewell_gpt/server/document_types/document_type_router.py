@@ -28,19 +28,23 @@ def get_document_types(request: Request) -> List[DocumentTypeResponse]:
 # Define POST endpoint (new)
 @document_type_router.post(
     "/document-types",
-    response_model=DocumentTypeResponse,
+    response_model=None,  # We'll return a dict with alreadyExists and type fields
     tags=["Document Types"],
     status_code=201 # Indicate resource creation
 )
 def create_document_type(
     type_create: DocumentTypeCreate, # Use the new model for request body
     request: Request
-) -> DocumentTypeResponse:
+) -> dict:
     """Create a new document type."""
     injector: Injector = request.state.injector
     service = injector.get(DocumentTypeService)
     try:
-        return service.create_document_type(type_create)
+        result = service.create_document_type(type_create)
+        # Flatten the response for the frontend: merge type fields at top level
+        type_data = result["type"].dict() if hasattr(result["type"], "dict") else dict(result["type"])
+        response = {"alreadyExists": result["alreadyExists"], **type_data}
+        return response
     except ValueError as e:
         # Handle potential duplicate title error from the service
         raise HTTPException(status_code=400, detail=str(e)) 

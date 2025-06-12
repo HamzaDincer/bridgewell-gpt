@@ -35,8 +35,8 @@ class DocumentCreate(BaseModel):
 class DocumentResponse(BaseModel):
     id: str
     name: str
-    status: str = "pending"
     date_added: datetime
+    phase: Optional[str] = None  # Add phase for granular status
 
     class Config:
         from_attributes = True

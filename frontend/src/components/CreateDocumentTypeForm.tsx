@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label"; // Assuming Shadcn Label exists or will be added
+import { Label } from "@/components/ui/label";
 import {
   UploadCloud,
   ChevronLeft,
@@ -16,16 +16,18 @@ import {
 import { useDropzone, FileRejection } from "react-dropzone";
 import { cn } from "@/lib/utils";
 import { useUpload } from "@/contexts/UploadContext";
-import { toast } from "sonner";
 
-// Import CreateDocumentTypeFormProps from @/types
-import type { CreateDocumentTypeFormProps } from "@/types";
+import type { CreateDocumentTypeFormProps, DocumentType } from "@/types";
 
 export function CreateDocumentTypeForm({
   initialDocumentTypeName,
-  onCreate,
-  onNavigateBack,
-}: CreateDocumentTypeFormProps) {
+  documentTypes,
+  setDocumentTypes,
+  ...props
+}: CreateDocumentTypeFormProps & {
+  documentTypes: DocumentType[];
+  setDocumentTypes: (types: DocumentType[]) => void;
+}) {
   const [documentTypeName, setDocumentTypeName] = useState(
     initialDocumentTypeName || "",
   );
@@ -33,6 +35,9 @@ export function CreateDocumentTypeForm({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { addUpload, updateUpload } = useUpload();
+
+  // Add a fallback for documentTypes
+  const safeDocumentTypes = documentTypes ?? [];
 
   const onDrop = useCallback(
     (acceptedFiles: File[], fileRejections: FileRejection[]) => {
@@ -84,146 +89,120 @@ export function CreateDocumentTypeForm({
     setIsLoading(true);
     setError(null);
 
-    const formData = new FormData();
-    formData.append("file", acceptedFile);
-    formData.append("document_type_name", documentTypeName.trim());
-
-    // Add upload to global state
+    // Add upload to global state for progress bar
     const uploadId = addUpload({
       fileName: acceptedFile.name,
       status: "uploading",
       progress: 0,
+      phase: "uploading",
     });
 
+    // Check if document type already exists
+    const existingType = safeDocumentTypes.find(
+      (t) => t.title.toLowerCase() === documentTypeName.trim().toLowerCase(),
+    );
+    let typeId = existingType ? existingType.id : null;
+
     try {
-      // Create AbortController for timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000);
-
-      try {
-        const response = await fetch("/api/v1/ingest/file", {
+      if (!typeId) {
+        // Create document type if it doesn't exist
+        const response = await fetch("/api/v1/document-types", {
           method: "POST",
-          body: formData,
-          signal: controller.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: documentTypeName.trim() }),
         });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          let errorMsg = `Upload failed with status: ${response.status}`;
-          try {
-            const errorData = await response.json();
-            errorMsg = errorData.detail || errorMsg;
-          } catch {
-            /* Ignore JSON parsing error */
-          }
-          throw new Error(errorMsg);
-        }
-
+        if (!response.ok) throw new Error("Failed to create document type");
         const result = await response.json();
-        console.log("Ingest successful:", result);
-
-        // Show toast with backend's quick response message
-        if (result?.message) {
-          toast.success(result.message);
-        }
-
-        const docId = result?.doc_ids?.[0];
-        if (!docId) {
-          throw new Error("No document ID received from server");
-        }
-        // Navigate immediately after getting document ID
-        onCreate(documentTypeName, acceptedFile, docId);
-
-        // Start background status polling
-        const processInBackground = async () => {
-          try {
-            updateUpload(uploadId, {
-              status: "processing",
-              progress: 10,
-            });
-
-            const checkStatus = async () => {
-              try {
-                const statusResponse = await fetch(
-                  `/api/v1/ingest/status/${docId}`,
-                );
-                const data = await statusResponse.json();
-                console.log("Status check response:", data);
-                // Update upload with phase and granular progress
-                let progress;
-                if (data.phase === "parsing") progress = 30;
-                else if (data.phase === "extraction") progress = 50;
-                else if (data.phase === "embedding") progress = 70;
-                else if (data.phase === "rag") progress = 90;
-                else if (data.phase === "completed") progress = 100;
-                updateUpload(uploadId, {
-                  status:
-                    data.status === "completed" ? "completed" : "processing",
-                  progress,
-                  phase: data.phase,
-                });
-                // Show toast as soon as extraction is done (phase is extraction or later)
-                if (["embedding", "rag", "completed"].includes(data.phase)) {
-                  toast.success("Document is ready! You can now view it.", {
-                    position: "top-right",
-                  });
-                }
-                if (data.status === "completed") {
-                  return true;
-                } else if (data.status === "error") {
-                  updateUpload(uploadId, {
-                    status: "error",
-                    error: data.message || "Processing failed",
-                  });
-                  return true;
-                }
-                return false;
-              } catch (error) {
-                console.error("Error checking status:", error);
-                return false;
-              }
-            };
-
-            const pollInterval = setInterval(async () => {
-              const isComplete = await checkStatus();
-              if (isComplete) {
-                clearInterval(pollInterval);
-              }
-            }, 2000);
-
-            setTimeout(() => {
-              clearInterval(pollInterval);
-              updateUpload(uploadId, {
-                status: "error",
-                error: "Processing timed out",
-              });
-            }, 5 * 60 * 1000);
-          } catch (error) {
-            console.error("Background processing error:", error);
-            updateUpload(uploadId, {
-              status: "error",
-              error:
-                error instanceof Error ? error.message : "Processing failed",
-            });
-          }
-        };
-        processInBackground();
-      } catch (fetchError) {
-        if (fetchError instanceof Error) {
-          if (fetchError.name === "AbortError") {
-            const errorMsg =
-              "The upload timed out. This could be because the file is too large or the server is busy processing other documents. Please try again or contact support if the issue persists.";
-            updateUpload(uploadId, {
-              status: "error",
-              error: errorMsg,
-            });
-            throw new Error(errorMsg);
-          }
-          throw fetchError;
-        }
-        throw fetchError;
+        typeId = result.id;
       }
+
+      // Step 1: Upload the document file
+      const formData = new FormData();
+      formData.append("file", acceptedFile);
+      const uploadResponse = await fetch("/api/v1/ingest/file", {
+        method: "POST",
+        body: formData,
+      });
+      if (!uploadResponse.ok) throw new Error("Failed to upload document");
+      updateUpload(uploadId, {
+        status: "processing",
+        phase: "processing",
+        progress: 50,
+      });
+      const uploadResult = await uploadResponse.json();
+      const docId = Array.isArray(uploadResult.doc_ids)
+        ? uploadResult.doc_ids[0]
+        : undefined;
+      if (!docId) throw new Error("No document ID returned from upload");
+
+      // Step 2: Associate the uploaded document with the document type
+      const associateResponse = await fetch(
+        `/api/v1/document-types/${typeId}/documents`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ doc_id: docId, doc_name: acceptedFile.name }),
+        },
+      );
+      if (!associateResponse.ok)
+        throw new Error("Failed to associate document with type");
+
+      updateUpload(uploadId, {
+        status: "completed",
+        phase: "completed",
+        progress: 100,
+      });
+
+      // After upload, always re-fetch document types from backend
+      const typesResponse = await fetch("/api/v1/document-types");
+      if (typesResponse.ok) {
+        const types = await typesResponse.json();
+        setDocumentTypes(types);
+      }
+
+      // Notify parent of success so it can navigate to the document list
+      if (props.onCreate) {
+        props.onCreate(documentTypeName, acceptedFile, docId);
+      }
+
+      // Poll for backend phase and update progress bar
+      const phaseProgress = {
+        uploading: 10,
+        parsing: 25,
+        extraction: 50,
+        embedding: 75,
+        rag: 90,
+        completed: 100,
+        error: 0,
+      };
+      let polling = true;
+      async function pollPhase() {
+        while (polling) {
+          try {
+            const res = await fetch(`/api/v1/ingest/status/${docId}`);
+            if (!res.ok) break;
+            const data = await res.json();
+            const phase = data.phase || "uploading";
+            const progress =
+              phaseProgress[phase as keyof typeof phaseProgress] ?? 0;
+            updateUpload(uploadId, {
+              phase,
+              progress,
+              status: phase === "completed" ? "completed" : "processing",
+            });
+            if (phase === "completed" || phase === "error") {
+              polling = false;
+              break;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          } catch {
+            break;
+          }
+        }
+      }
+      pollPhase();
+
+      // ... (rest of your success logic) ...
     } catch (err: unknown) {
       console.error("Upload error:", err);
       const message =
@@ -231,10 +210,7 @@ export function CreateDocumentTypeForm({
           ? err.message
           : "An unexpected error occurred during upload.";
       setError(message);
-      updateUpload(uploadId, {
-        status: "error",
-        error: message,
-      });
+      updateUpload(uploadId, { status: "error", error: message });
     } finally {
       setIsLoading(false);
     }
@@ -242,7 +218,7 @@ export function CreateDocumentTypeForm({
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <Button variant="ghost" onClick={onNavigateBack} className="mb-4">
+      <Button variant="ghost" onClick={props.onNavigateBack} className="mb-4">
         <ChevronLeft className="h-4 w-4 mr-2" />
         Back to Document Types
       </Button>

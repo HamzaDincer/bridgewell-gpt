@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   ChevronDown,
   MoreVertical,
@@ -61,6 +61,16 @@ export default function Dashboard() {
     string | null
   >(null);
   const [activeDocuments, setActiveDocuments] = useState<Document[]>([]);
+  const [isFirstPoll, setIsFirstPoll] = useState(true);
+  const shownReadyToast = useRef<Set<string>>(new Set());
+
+  type ApiDocumentWithPhase = {
+    id: string;
+    name: string;
+    status: string;
+    date_added: string;
+    phase?: string;
+  };
 
   useEffect(() => {
     const fetchTypes = async () => {
@@ -94,6 +104,18 @@ export default function Dashboard() {
     fetchTypes();
   }, []);
 
+  // Load shownReadyToast from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem("shownReadyToast");
+    if (stored) {
+      try {
+        shownReadyToast.current = new Set(JSON.parse(stored));
+      } catch {
+        // Ignore JSON parse errors, treat as empty
+      }
+    }
+  }, []);
+
   const handleSelectDocumentType = async (typeName: string) => {
     setSelectedDocumentType(typeName);
     setViewMode("createForm");
@@ -118,16 +140,9 @@ export default function Dashboard() {
     );
 
     setDocumentTypes((prevTypes) => {
-      const existingTypeIndex = prevTypes.findIndex(
-        (t) => t.id === newlyCreatedType.id,
-      );
-      if (existingTypeIndex > -1) {
-        const updatedTypes = [...prevTypes];
-        updatedTypes[existingTypeIndex] = newlyCreatedType;
-        return updatedTypes;
-      } else {
-        return [...prevTypes, newlyCreatedType];
-      }
+      // Remove any existing type with the same id, then add the new one
+      const filtered = prevTypes.filter((t) => t.id !== newlyCreatedType.id);
+      return [...filtered, newlyCreatedType];
     });
 
     if (documents) {
@@ -162,10 +177,9 @@ export default function Dashboard() {
       }
       const documents = await docsResponse.json();
       const formattedDocuments: Document[] = documents.map(
-        (doc: ApiDocument) => ({
+        (doc: ApiDocument & { phase?: string }) => ({
           id: doc.id,
           name: doc.name,
-          status: doc.status,
           uploadedBy: "User", // Placeholder
           uploadType: "Direct Upload", // Placeholder
           dateModified: new Date(doc.date_added).toLocaleString("en-US", {
@@ -176,6 +190,7 @@ export default function Dashboard() {
             dateStyle: "medium",
             timeStyle: "short",
           }),
+          phase: doc.phase, // Pass through phase if present
         }),
       );
       setActiveDocuments(formattedDocuments);
@@ -195,6 +210,83 @@ export default function Dashboard() {
   // Add handler for upload button
   const handleUploadClick = () => {
     setViewMode("upload");
+  };
+
+  // Polling for document status updates in documentList view
+  useEffect(() => {
+    if (viewMode !== "documentList" || !selectedDocumentType) return;
+    const fetchDocs = async () => {
+      try {
+        // Find the typeId for the selectedDocumentType
+        const docType = documentTypes.find(
+          (dt) => dt.title === selectedDocumentType,
+        );
+        if (!docType) return;
+        const docsResponse = await fetch(
+          `/api/v1/document-types/${docType.id}/documents`,
+        );
+        if (!docsResponse.ok) return;
+        const documents = await docsResponse.json();
+        const formattedDocuments = documents.map(
+          (doc: ApiDocumentWithPhase) => ({
+            id: doc.id,
+            name: doc.name,
+            uploadedBy: "User",
+            uploadType: "Direct Upload",
+            dateModified: new Date(doc.date_added).toLocaleString("en-US", {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }),
+            dateAdded: new Date(doc.date_added).toLocaleString("en-US", {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }),
+            phase: doc.phase,
+          }),
+        );
+        // Show toast only once per document when it becomes ready to view
+        formattedDocuments.forEach((doc: ApiDocumentWithPhase) => {
+          const readyPhases = ["embedding", "rag", "completed"];
+          if (
+            readyPhases.includes(doc.phase || "") &&
+            !shownReadyToast.current.has(doc.id)
+          ) {
+            toast.success(
+              `Document "${doc.name}" is ready! You can now view it.`,
+              { position: "top-right", duration: 4000 },
+            );
+            shownReadyToast.current.add(doc.id);
+            localStorage.setItem(
+              "shownReadyToast",
+              JSON.stringify(Array.from(shownReadyToast.current)),
+            );
+            // After a document is ready, refresh document types to eliminate duplicate cards
+            fetchAndSetDocumentTypes();
+          }
+        });
+        setActiveDocuments(formattedDocuments);
+        setIsFirstPoll(false);
+      } catch {
+        // Ignore polling errors
+      }
+    };
+    fetchDocs();
+    const intervalId: NodeJS.Timeout = setInterval(fetchDocs, 1000);
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [viewMode, selectedDocumentType, documentTypes]);
+
+  // Fetch document types from backend and update state
+  const fetchAndSetDocumentTypes = async () => {
+    try {
+      const response = await fetch("/api/v1/document-types");
+      if (!response.ok) return;
+      const data: DocumentType[] = await response.json();
+      setDocumentTypes(data);
+    } catch {
+      // Ignore errors
+    }
   };
 
   return (
@@ -400,7 +492,7 @@ export default function Dashboard() {
                     documentTypeName={selectedDocumentType}
                     documents={activeDocuments}
                     onBack={navigateToDashboard}
-                    isLoading={isLoadingTypes}
+                    isLoading={isLoadingTypes || isFirstPoll}
                     error={fetchError}
                     onUpload={handleUploadClick}
                   />

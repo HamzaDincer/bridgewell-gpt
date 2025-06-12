@@ -3,6 +3,7 @@ import "./globals.css";
 import { Inter } from "next/font/google";
 import { UploadProvider } from "@/contexts/UploadContext";
 import { UploadProgressContainer } from "@/components/UploadProgressContainer";
+import { Toaster } from "sonner";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -22,6 +23,7 @@ export default function RootLayout({
         <UploadProvider>
           {children}
           <UploadProgressContainer />
+          <Toaster position="top-right" />
         </UploadProvider>
       </body>
     </html>

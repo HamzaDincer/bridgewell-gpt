@@ -24,6 +24,7 @@ from bridgewell_gpt.components.ingest.ingest_helper import IngestionHelper
 from bridgewell_gpt.paths import local_data_path
 from bridgewell_gpt.settings.settings import Settings
 from bridgewell_gpt.utils.eta import eta
+from bridgewell_gpt.server.document_types.document_type_service import DocumentTypeService
 
 logger = logging.getLogger(__name__)
 
@@ -140,18 +141,20 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
 
     def _background_save_docs(self, file_name: str, stored_file_path: Path, doc_id: str) -> None:
         """Save documents to index in the background and perform RAG extraction."""
+        def update_phase(doc_id: str, phase: str):
+            DocumentTypeService().update_document_phase(doc_id, phase)
+            logger.info(f"[PHASE UPDATE] doc_id={doc_id} phase={phase}")
+
         def save_task():
             try:
-                # Write status: parsing
-                IngestionHelper.write_status(doc_id, "parsing")
+                update_phase(doc_id, "parsing")
                 logger.debug("Saving the documents in the index and doc store")
                 with self._index_thread_lock:
                     documents = IngestionHelper.transform_file_into_documents(file_name, stored_file_path)
                     logger.info(
                         "Transformed file=%s into count=%s documents", file_name, len(documents)
                     )
-                    # Write status: extraction
-                    IngestionHelper.write_status(doc_id, "extraction")
+                    update_phase(doc_id, "extraction")
                     # Generate document IDs before extraction
                     for doc in documents:
                         doc.doc_id = doc_id
@@ -164,8 +167,7 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                     extraction = self.extraction_component.extract_document(documents, "Benefit", file_name)
                     logger.info(f"Extraction: {extraction}")
 
-                    # Write status: embedding
-                    IngestionHelper.write_status(doc_id, "embedding")
+                    update_phase(doc_id, "embedding")
                     # Store extraction result in document metadata
                     if extraction and extraction.get("status") == "completed":
                         logger.info(f"Initial extraction successful with ID: {extraction.get('extraction_id')}")
@@ -186,7 +188,7 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
 
                 # After embeddings are complete, perform RAG extraction
                 logger.info("Starting RAG extraction after embeddings")
-                IngestionHelper.write_status(doc_id, "rag")
+                update_phase(doc_id, "rag")
                 with self._rag_thread_lock:
                     try:
                         # Get the file name from the first document's metadata
@@ -306,13 +308,13 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                             logger.info("No missing fields found, skipping RAG extraction")
 
                         # After RAG (or if skipped), mark as completed
-                        IngestionHelper.write_status(doc_id, "completed")
+                        update_phase(doc_id, "completed")
                     except Exception as e:
                         logger.error(f"Error during RAG extraction: {str(e)}")
-                        IngestionHelper.write_status(doc_id, "completed")
+                        update_phase(doc_id, "completed")
             except Exception as e:
                 logger.error(f"Error in save task: {str(e)}")
-                IngestionHelper.write_status(doc_id, "completed")
+                update_phase(doc_id, "completed")
 
         import threading
         thread = threading.Thread(target=save_task)

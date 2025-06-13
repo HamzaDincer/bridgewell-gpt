@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { docId: string } },
+  { params }: { params: Record<string, string> },
 ) {
-  const { docId } = await params;
   const body = await req.json();
+  const docId = params.docId;
 
   // Ensure context_filter includes the docId
   const newBody = {
@@ -28,6 +28,12 @@ export async function POST(
       body: JSON.stringify(newBody),
     },
   );
-  const data = await backendRes.json();
+  const contentType = backendRes.headers.get("content-type");
+  let data;
+  if (contentType && contentType.includes("application/json")) {
+    data = await backendRes.json();
+  } else {
+    data = { error: await backendRes.text() };
+  }
   return NextResponse.json(data, { status: backendRes.status });
 }

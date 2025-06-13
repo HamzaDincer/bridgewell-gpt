@@ -78,7 +78,7 @@ class DocumentTypeService:
             existing = next((item for item in data if item['title'].lower() == type_create.title.lower()), None)
             if existing:
                 return {"alreadyExists": True, "type": DocumentTypeResponse(**existing)}
-            raise ValueError(f"Duplicate title error for '{type_create.title}'")
+            raise ValueError(f"Duplicate title error for '{type_create.title}'") 
         # Determine the next ID
         new_id = max((item['id'] for item in data), default=100) + 1
         new_type_data = {

@@ -20,6 +20,11 @@ import type {
   ExtractionField,
 } from "@/types";
 
+// Custom display names for benefit sections
+const SECTION_LABELS: Record<string, string> = {
+  life_insurance_ad_d: "LIFE INSURANCE and AD&D",
+};
+
 function toLabel(str: string) {
   return str.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -188,7 +193,8 @@ function ExtractionPanel({
                     borderRadius: "4px",
                   }}
                 >
-                  {section.replace(/_/g, " ").toUpperCase()}
+                  {SECTION_LABELS[section] ||
+                    section.replace(/_/g, " ").toUpperCase()}
                 </h3>
                 <div
                   style={{

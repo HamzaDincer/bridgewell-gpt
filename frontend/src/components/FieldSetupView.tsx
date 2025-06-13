@@ -61,6 +61,11 @@ const fieldTypeOptions: { value: FieldType; label: string }[] = [
   { value: "select", label: "Select (Dropdown)" },
 ];
 
+// Custom display names for benefit sections
+const SECTION_LABELS: Record<string, string> = {
+  life_insurance_ad_d: "LIFE INSURANCE and AD&D",
+};
+
 export function FieldSetupView({ documentTypeName }: FieldSetupViewProps) {
   const [fields, setFields] = useState<Field[]>(() =>
     getMockFields(documentTypeName),
@@ -234,10 +239,12 @@ export function FieldSetupView({ documentTypeName }: FieldSetupViewProps) {
       </div>
 
       <div>
+        {/* Custom display names for benefit sections */}
         {Object.entries(BENEFIT_FIELDS).map(([section, fields]) => (
           <div key={section} className="mb-6">
             <h3 className="font-bold mb-2">
-              {section.replace(/_/g, " ").toUpperCase()}
+              {SECTION_LABELS[section] ||
+                section.replace(/_/g, " ").toUpperCase()}
             </h3>
             {fields.map((field) => (
               <div key={field} className="mb-2 flex items-center">

@@ -62,5 +62,3 @@ settings-me.yaml
 # pyenv
 /.python-version
 
-# macOS
-.DS_Store

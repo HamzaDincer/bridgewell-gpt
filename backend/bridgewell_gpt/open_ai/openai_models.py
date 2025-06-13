@@ -63,7 +63,7 @@ class OpenAICompletion(BaseModel):
             id=str(uuid.uuid4()),
             object="completion",
             created=int(time.time()),
-            model="bridgewell-gpt",
+            model="private-gpt",
             choices=[
                 OpenAIChoice(
                     message=OpenAIMessage(role="assistant", content=text),
@@ -85,7 +85,7 @@ class OpenAICompletion(BaseModel):
             id=str(uuid.uuid4()),
             object="completion.chunk",
             created=int(time.time()),
-            model="bridgewell-gpt",
+            model="private-gpt",
             choices=[
                 OpenAIChoice(
                     delta=OpenAIDelta(content=text),

@@ -99,6 +99,13 @@ type ActiveField = {
   annotationId: string;
 } | null;
 
+// Add SourceRef type for chat sources
+export type SourceRef = {
+  text: string;
+  page: number;
+  bbox: { x: number; y: number; width: number; height: number };
+};
+
 function ExtractionPanel({
   extraction,
   loading,
@@ -511,10 +518,19 @@ function StyleManager() {
 }
 
 // Simple ChatBox component for sidebar chat
-function ChatBox({ docId }: { docId: string }) {
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>(
-    [],
-  );
+function ChatBox({
+  docId,
+  onSourceClick,
+}: {
+  docId: string;
+  onSourceClick: (
+    page: number,
+    bbox: { x: number; y: number; width: number; height: number },
+  ) => void;
+}) {
+  const [messages, setMessages] = useState<
+    { role: string; content: string; sources?: SourceRef[] }[]
+  >([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -523,16 +539,85 @@ function ChatBox({ docId }: { docId: string }) {
     setMessages((msgs) => [...msgs, { role: "user", content: input }]);
     setLoading(true);
     try {
-      // Replace with your backend chat endpoint
       const res = await fetch(`/api/v1/documents/${docId}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: input }),
+        body: JSON.stringify({
+          messages: [{ role: "user", content: input }],
+          use_context: true,
+          include_sources: true,
+          context_filter: { docs_ids: [docId] },
+        }),
       });
       const data = await res.json();
+      const answer =
+        data.choices?.[0]?.message?.content ||
+        data.choices?.[0]?.delta?.content ||
+        data.response ||
+        "(No response)";
+      // Parse sources
+      const sources: SourceRef[] =
+        data.choices?.[0]?.sources
+          ?.map((src: unknown): SourceRef | null => {
+            // src is expected to be { text: string, document: { doc_metadata: { page: number, bbox: [...] } } }
+            if (!src || typeof src !== "object") return null;
+            const s = src as {
+              text: string;
+              document?: {
+                doc_metadata?: {
+                  page?: number;
+                  bbox?: {
+                    x: number;
+                    y: number;
+                    width: number;
+                    height: number;
+                  }[];
+                };
+              };
+            };
+            const meta = s.document?.doc_metadata || {};
+            const bbox =
+              Array.isArray(meta.bbox) && meta.bbox.length > 0
+                ? (meta.bbox[0] as {
+                    x: number;
+                    y: number;
+                    width: number;
+                    height: number;
+                  })
+                : null;
+            return bbox && typeof meta.page === "number"
+              ? {
+                  text: s.text,
+                  page: meta.page,
+                  bbox,
+                }
+              : null;
+          })
+          .filter((v: SourceRef | null): v is SourceRef => Boolean(v)) || [];
+      // Filter sources: remove duplicates, boilerplate, and very short text
+      const seenTexts = new Set<string>();
+      const filteredSources = sources.filter((src) => {
+        const text = src.text.trim();
+        if (
+          seenTexts.has(text) ||
+          text.length < 20 ||
+          /^northern labs inc\.?/i.test(text) ||
+          /^policy:/i.test(text) ||
+          /^benefit summary/i.test(text) ||
+          /^all employees/i.test(text) ||
+          /^page \d+/i.test(text)
+        ) {
+          return false;
+        }
+        seenTexts.add(text);
+        return true;
+      });
+      // Only include the first reference
+      const limitedSources =
+        filteredSources.length > 0 ? [filteredSources[0]] : [];
       setMessages((msgs) => [
         ...msgs,
-        { role: "assistant", content: data.response || "(No response)" },
+        { role: "assistant", content: answer, sources: limitedSources },
       ]);
     } catch (e: unknown) {
       console.error("Error sending message:", e);
@@ -584,6 +669,49 @@ function ChatBox({ docId }: { docId: string }) {
             >
               {msg.content}
             </span>
+            {/* Show sources for assistant messages */}
+            {msg.role === "assistant" &&
+              msg.sources &&
+              msg.sources.length > 0 && (
+                <div style={{ marginTop: 8, textAlign: "left" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      gap: 4,
+                    }}
+                  >
+                    {msg.sources.map((src, j) => (
+                      <button
+                        key={j}
+                        style={{
+                          background: "#f8fafc",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: 6,
+                          padding: "3px 10px",
+                          color: "#22c55e",
+                          fontWeight: 500,
+                          cursor: "pointer",
+                          fontSize: 13,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                          marginLeft: 0,
+                          boxShadow: "none",
+                        }}
+                        onClick={() => onSourceClick(src.page, src.bbox)}
+                      >
+                        {j + 1}.{" "}
+                        <span style={{ textDecoration: "underline" }}>
+                          text
+                        </span>{" "}
+                        <span style={{ fontSize: 15 }}>&rarr;</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
           </div>
         ))}
       </div>
@@ -624,6 +752,36 @@ function ChatBox({ docId }: { docId: string }) {
   );
 }
 
+// Utility to convert {b, l, r, t} to {x, y, width, height}
+function convertBbox(bbox: unknown) {
+  function isLTRB(
+    obj: unknown,
+  ): obj is { b: number; l: number; r: number; t: number } {
+    return (
+      typeof obj === "object" &&
+      obj !== null &&
+      "b" in obj &&
+      typeof (obj as Record<string, unknown>).b === "number" &&
+      "l" in obj &&
+      typeof (obj as Record<string, unknown>).l === "number" &&
+      "r" in obj &&
+      typeof (obj as Record<string, unknown>).r === "number" &&
+      "t" in obj &&
+      typeof (obj as Record<string, unknown>).t === "number"
+    );
+  }
+  if (isLTRB(bbox)) {
+    const { b, l, r, t } = bbox;
+    return {
+      x: l,
+      y: t,
+      width: r - l,
+      height: b - t,
+    };
+  }
+  return bbox as { x: number; y: number; width: number; height: number };
+}
+
 export default function DocumentReviewPage() {
   const router = useRouter();
   const sidebarRef = useRef<HTMLDivElement | null>(null);
@@ -639,6 +797,10 @@ export default function DocumentReviewPage() {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const lastClickedFieldRef = useRef<HTMLElement | null>(null);
+  const [chatHighlight, setChatHighlight] = useState<{
+    page: number;
+    rect: { x: number; y: number; width: number; height: number };
+  } | null>(null);
 
   // Remove scroll event logic and use setInterval for connector line updates
   useEffect(() => {
@@ -804,6 +966,41 @@ export default function DocumentReviewPage() {
     }
   };
 
+  // In DocumentReviewPage, add the handler and pass it to ChatBox
+  const handleChatSourceClick = (
+    page: number,
+    bbox:
+      | { x: number; y: number; width: number; height: number }
+      | { b: number; l: number; r: number; t: number },
+  ) => {
+    const rect = convertBbox(bbox);
+    setChatHighlight({ page: page + 1, rect }); // +1 if PDF pages are 1-indexed
+    // Scroll to the page container first
+    const pageElement = document.querySelector(
+      `[data-page-number='${page + 1}']`,
+    );
+    if (pageElement) {
+      pageElement.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      // Wait for the highlight to render, then scroll to the highlight box
+      setTimeout(() => {
+        const highlight = pageElement.querySelector(
+          "[data-annotation-id='chat-highlight']",
+        );
+        if (highlight) {
+          highlight.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 300); // Adjust delay if needed for rendering
+    }
+  };
+
+  // Auto-clear chat highlight after 4 seconds
+  useEffect(() => {
+    if (chatHighlight) {
+      const timeout = setTimeout(() => setChatHighlight(null), 4000);
+      return () => clearTimeout(timeout);
+    }
+  }, [chatHighlight]);
+
   return (
     <div style={{ display: "flex", height: "100vh" }}>
       <StyleManager />
@@ -878,7 +1075,10 @@ export default function DocumentReviewPage() {
               onExtractionUpdate={setExtractionResult}
             />
           ) : (
-            <ChatBox docId={params.docId as string} />
+            <ChatBox
+              docId={params.docId as string}
+              onSourceClick={handleChatSourceClick}
+            />
           )}
         </div>
       </div>
@@ -921,7 +1121,26 @@ export default function DocumentReviewPage() {
                     width={800}
                   >
                     <AnnotationLayer
-                      annotations={annotationsByPage[pageNum] || []}
+                      annotations={[
+                        ...(annotationsByPage[pageNum] || []),
+                        ...(chatHighlight && chatHighlight.page === pageNum
+                          ? [
+                              {
+                                id: "chat-highlight",
+                                content: "Chat Reference",
+                                position: {
+                                  x: chatHighlight.rect.x,
+                                  y: chatHighlight.rect.y,
+                                },
+                                type: "bounding_box",
+                                color: "#22c55e", // green
+                                pageNumber: pageNum,
+                                width: chatHighlight.rect.width,
+                                height: chatHighlight.rect.height,
+                              },
+                            ]
+                          : []),
+                      ]}
                       pageNumber={pageNum}
                     />
                   </Page>

@@ -1,0 +1,33 @@
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { docId: string } },
+) {
+  const { docId } = await params;
+  const body = await req.json();
+
+  // Ensure context_filter includes the docId
+  const newBody = {
+    ...body,
+    context_filter: {
+      ...(body.context_filter || {}),
+      docs_ids: [docId],
+    },
+  };
+
+  const backendRes = await fetch(
+    `${
+      process.env.BACKEND_API_URL || "http://localhost:8001"
+    }/v1/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(newBody),
+    },
+  );
+  const data = await backendRes.json();
+  return NextResponse.json(data, { status: backendRes.status });
+}

@@ -1,9 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(req: NextRequest, { params }: any) {
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ docId: string }> },
+) {
   const body = await req.json();
-  const docId = params.docId;
+  const { docId } = await context.params;
 
   // Ensure context_filter includes the docId
   const newBody = {

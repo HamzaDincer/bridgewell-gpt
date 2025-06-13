@@ -97,6 +97,7 @@ class IngestionHelper:
                 logger.info(f"Successfully stored file at: {file_path}")
             else:
                 logger.info(f"Source and destination are the same file, skipping copy: {file_path}")
+                file_path = file_data
             return file_path
         except Exception as e:
             logger.error(f"Error storing file: {str(e)}")

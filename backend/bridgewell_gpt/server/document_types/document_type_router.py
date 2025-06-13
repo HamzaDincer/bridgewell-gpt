@@ -1,6 +1,6 @@
 import os
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException, Body
 from injector import Injector
 
 from bridgewell_gpt.server.document_types.document_type_models import DocumentTypeResponse, DocumentTypeCreate, DocumentCreate, DocumentResponse
@@ -106,20 +106,14 @@ def get_document_by_id(doc_id: str, request: Request):
     for doc_type in doc_types:
         for doc in getattr(doc_type, "documents", []):
             if str(doc.id) == str(doc_id):
-                # Get file name from doc.name
                 file_name = doc.name
-                
-                # Get extraction results using the file name
-                extraction_result = extraction_component.get_latest_extraction_by_file(file_name)
+                extraction_result = extraction_component.get_latest_extraction_by_doc_id(doc_id)
                 extraction = {}
                 if extraction_result:
                     extraction = extraction_result.get("result", {})
-                
-                # Use x-forwarded-proto and host headers to construct the correct URL
                 scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
                 host = request.headers.get("host", request.url.hostname)
                 url = f"{scheme}://{host}/original_files/{file_name}"
-                
                 return {"url": url, "extraction": extraction}
     raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
 
@@ -133,20 +127,29 @@ def get_document_extraction(doc_id: str, request: Request) -> Dict[str, Any]:
     injector: Injector = request.state.injector
     service = injector.get(DocumentTypeService)
     extraction_component = injector.get(ExtractionComponent)
-    
-    # First get the document to get its file name
     doc_types = service.get_document_types()
     for doc_type in doc_types:
         for doc in getattr(doc_type, "documents", []):
             if str(doc.id) == str(doc_id):
-                # Get extraction results using the file name
-                extraction_result = extraction_component.get_latest_extraction_by_file(doc.name)
+                extraction_result = extraction_component.get_latest_extraction_by_doc_id(doc_id)
                 if extraction_result:
                     return extraction_result
                 else:
                     return {"status": "not_found", "message": "No extraction results found"}
-                
     raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
+
+@document_type_router.post(
+    "/documents/{doc_id}/extraction",
+    tags=["Document Types"]
+)
+def update_document_extraction(doc_id: str, request: Request, extraction: dict = Body(...)):
+    """
+    Update the extraction result for a document.
+    """
+    injector: Injector = request.state.injector
+    extraction_component = injector.get(ExtractionComponent)
+    extraction_component.save_extraction_result(doc_id, extraction)
+    return extraction_component.get_latest_extraction_by_doc_id(doc_id)
 
 # We can add POST endpoint later if needed
 # @document_type_router.post("/document-types", ...) ... 

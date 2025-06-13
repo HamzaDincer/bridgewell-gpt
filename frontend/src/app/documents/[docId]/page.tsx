@@ -110,6 +110,8 @@ function ExtractionPanel({
   exporting,
   exportError,
   lastClickedFieldRef,
+  docId,
+  onExtractionUpdate,
 }: {
   extraction: ExtractionResult | null;
   loading: boolean;
@@ -121,7 +123,71 @@ function ExtractionPanel({
   exporting: boolean;
   exportError: string | null;
   lastClickedFieldRef: React.RefObject<HTMLElement | null>;
+  docId: string;
+  onExtractionUpdate: (result: ExtractionResult) => void;
 }) {
+  const [editingField, setEditingField] = useState<{
+    section: string;
+    field: string;
+  } | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleDoubleClick = (
+    section: string,
+    fieldName: string,
+    value: string,
+  ) => {
+    setEditingField({ section, field: fieldName });
+    setEditValue(value || "");
+  };
+
+  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEditValue(e.target.value);
+  };
+
+  const handleEditSave = async () => {
+    if (!editingField || !extraction) return;
+    const { section, field: fieldName } = editingField;
+    // Deep clone extraction result
+    const updatedExtraction: ExtractionResult = JSON.parse(
+      JSON.stringify(extraction),
+    );
+    // Ensure the field object has all required properties
+    const sectionFields = updatedExtraction.result[
+      section
+    ] as unknown as Record<string, ExtractionField | null>;
+    const prevField = sectionFields?.[fieldName];
+    sectionFields[fieldName] = {
+      value: editValue,
+      page: prevField?.page ?? 0,
+      coordinates: prevField?.coordinates ?? null,
+      source_snippet: prevField?.source_snippet ?? "",
+    };
+    onExtractionUpdate(updatedExtraction);
+    try {
+      setSaving(true);
+      await fetch(`/api/v1/documents/${docId}/extraction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedExtraction),
+      });
+    } catch (e) {
+      console.error("Failed to update extraction field", e);
+    } finally {
+      setSaving(false);
+      setEditingField(null);
+    }
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleEditSave();
+    } else if (e.key === "Escape") {
+      setEditingField(null);
+    }
+  };
+
   return (
     <div
       ref={sidebarRef}
@@ -175,11 +241,18 @@ function ExtractionPanel({
         <div>
           {Object.entries(BENEFIT_FIELDS).map(([section, fields]) => {
             const sectionRaw = extraction.result[section];
-            const sectionObj =
+            // Only treat as Record<string, ExtractionField | null> if at least one value is an object with a 'value' property and sectionRaw is not an ExtractionField itself
+            const sectionFields:
+              | Record<string, ExtractionField | null>
+              | undefined =
               sectionRaw &&
               typeof sectionRaw === "object" &&
-              !Array.isArray(sectionRaw)
-                ? (sectionRaw as unknown as Record<string, ExtractionField>)
+              !Array.isArray(sectionRaw) &&
+              !("value" in sectionRaw) &&
+              Object.values(sectionRaw).some(
+                (v) => v && typeof v === "object" && "value" in v,
+              )
+                ? (sectionRaw as Record<string, ExtractionField | null>)
                 : undefined;
             return (
               <div key={section} style={{ marginBottom: 32 }}>
@@ -203,11 +276,17 @@ function ExtractionPanel({
                     borderCollapse: "collapse",
                   }}
                 >
-                  {fields.map((field) => {
-                    const fieldObj = sectionObj?.[field];
+                  {fields.map((fieldName: string) => {
+                    if (!sectionFields) return null;
+                    const fieldObj: ExtractionField | null | undefined =
+                      sectionFields[fieldName];
+                    const isEditing =
+                      editingField &&
+                      editingField.section === section &&
+                      editingField.field === fieldName;
                     return (
                       <div
-                        key={field}
+                        key={fieldName}
                         onClick={function (event) {
                           if (
                             fieldObj?.page !== undefined &&
@@ -225,6 +304,13 @@ function ExtractionPanel({
                             onFieldClick({ fieldRect, annotationId });
                           }
                         }}
+                        onDoubleClick={() =>
+                          handleDoubleClick(
+                            section,
+                            fieldName,
+                            fieldObj?.value || "",
+                          )
+                        }
                         className={fieldObj?.coordinates ? "clickable-row" : ""}
                         data-field-id={
                           fieldObj?.page !== undefined && fieldObj?.coordinates
@@ -253,7 +339,7 @@ function ExtractionPanel({
                             color: fieldObj?.value ? "#4b5563" : "#9ca3af",
                           }}
                         >
-                          {field.replace(/_/g, " ")}
+                          {fieldName.replace(/_/g, " ")}
                         </div>
                         <div
                           style={{
@@ -264,7 +350,26 @@ function ExtractionPanel({
                             fontStyle: fieldObj?.value ? "normal" : "italic",
                           }}
                         >
-                          {fieldObj?.value || "(Not found)"}
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editValue}
+                              autoFocus
+                              onChange={handleEditChange}
+                              onBlur={handleEditSave}
+                              onKeyDown={handleEditKeyDown}
+                              disabled={saving}
+                              style={{
+                                width: "100%",
+                                fontSize: 15,
+                                padding: "4px 8px",
+                                border: "1px solid #6366f1",
+                                borderRadius: 4,
+                              }}
+                            />
+                          ) : (
+                            fieldObj?.value || "(Not found)"
+                          )}
                         </div>
                       </div>
                     );
@@ -646,15 +751,22 @@ export default function DocumentReviewPage() {
     for (const [section, fields] of Object.entries(BENEFIT_FIELDS)) {
       extractionDisplay[section] = {};
       const sectionRaw = extractionResult.result[section];
-      const sectionObj =
+      // Only treat as Record<string, ExtractionField | null> if at least one value is an object with a 'value' property and sectionRaw is not an ExtractionField itself
+      const sectionFields: Record<string, ExtractionField | null> | undefined =
         sectionRaw &&
         typeof sectionRaw === "object" &&
-        !Array.isArray(sectionRaw)
-          ? (sectionRaw as unknown as Record<string, ExtractionField>)
+        !Array.isArray(sectionRaw) &&
+        !("value" in sectionRaw) &&
+        Object.values(sectionRaw).some(
+          (v) => v && typeof v === "object" && "value" in v,
+        )
+          ? (sectionRaw as Record<string, ExtractionField | null>)
           : undefined;
-      for (const field of fields) {
-        const fieldObj = sectionObj?.[field];
-        extractionDisplay[section][field] =
+      for (const fieldName of fields as readonly string[]) {
+        if (!sectionFields) continue;
+        const fieldObj: ExtractionField | null | undefined =
+          sectionFields[fieldName];
+        extractionDisplay[section][fieldName] =
           fieldObj && typeof fieldObj.value === "string" ? fieldObj.value : "";
       }
     }
@@ -762,6 +874,8 @@ export default function DocumentReviewPage() {
               exporting={exporting}
               exportError={exportError}
               lastClickedFieldRef={lastClickedFieldRef}
+              docId={params.docId as string}
+              onExtractionUpdate={setExtractionResult}
             />
           ) : (
             <ChatBox docId={params.docId as string} />

@@ -30,6 +30,7 @@ class ExtractionComponent:
         documents: List[Document],
         document_type: str,
         file_name: str,
+        doc_id: str,
         agent_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """Extract information from documents using LlamaExtract.
@@ -38,6 +39,7 @@ class ExtractionComponent:
             documents: List of documents to extract from
             document_type: Type of the document
             file_name: Name of the file
+            doc_id: ID of the document
             agent_name: Optional specific agent name to use
             
         Returns:
@@ -71,7 +73,7 @@ class ExtractionComponent:
             
             # Store chunks for future reference
             self._store_extraction_data(
-                extraction_id,
+                doc_id,
                 chunks,
                 document_type,
                 file_name
@@ -111,13 +113,14 @@ class ExtractionComponent:
                     logger.debug("Extraction result: %s", json.dumps(result, indent=2))
                     
                     # Store the successful result
-                    result_path = self.storage_path / extraction_id / "result.json"
+                    result_path = self.storage_path / doc_id / "result.json"
                     logger.info(f"Storing extraction result at: {result_path}")
                     result_path.parent.mkdir(parents=True, exist_ok=True)
                     
                     with open(result_path, "w") as f:
                         json.dump({
                             "extraction_id": extraction_id,
+                            "doc_id": doc_id,
                             "document_type": document_type,
                             "file_name": file_name,
                             "status": "completed",
@@ -129,6 +132,7 @@ class ExtractionComponent:
                     
                     return {
                         "extraction_id": extraction_id,
+                        "doc_id": doc_id,
                         "document_type": document_type,
                         "file_name": file_name,
                         "status": "completed",
@@ -178,17 +182,20 @@ class ExtractionComponent:
                 "file_name": file_name
             }, f, indent=2)
 
-    def get_extraction_result(self, extraction_id: str) -> Optional[Dict[str, Any]]:
-        """Get stored extraction result by ID."""
-        extraction_dir = self.storage_path / extraction_id
+    def get_extraction_result(self, doc_id: str) -> Optional[Dict[str, Any]]:
+        """Get stored extraction result by doc_id."""
+        extraction_dir = self.storage_path / doc_id
         if not extraction_dir.exists():
             return None
-            
         result_path = extraction_dir / "result.json"
         if result_path.exists():
             with open(result_path, "r") as f:
                 return json.load(f)
         return None
+
+    def get_latest_extraction_by_doc_id(self, doc_id: str) -> Optional[Dict[str, Any]]:
+        """Get the extraction result for a specific doc_id."""
+        return self.get_extraction_result(doc_id)
 
     def list_extraction_results(self, document_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """List all stored extraction results."""
@@ -203,27 +210,10 @@ class ExtractionComponent:
                 results.append(result)
         return results
 
-    def get_latest_extraction_by_file(self, file_name: str) -> Optional[Dict[str, Any]]:
-        """Get the most recent extraction result for a specific file.
-        
-        Args:
-            file_name: Name of the file to get extraction for
-            
-        Returns:
-            The most recent extraction result or None if not found
-        """
-        results = []
-        for extraction_id in os.listdir(self.storage_path):
-            extraction_dir = self.storage_path / extraction_id
-            if not extraction_dir.is_dir():
-                continue
-                
-            result = self.get_extraction_result(extraction_id)
-            if result and result.get("file_name") == file_name:
-                results.append(result)
-        
-        if not results:
-            return None
-            
-        # Return the most recent result based on timestamp
-        return max(results, key=lambda x: x.get("timestamp", ""))
+    def save_extraction_result(self, doc_id: str, extraction: dict) -> None:
+        """Save the updated extraction result for a document, including all fields (value, page, coordinates, etc.)."""
+        result_path = self.storage_path / doc_id / "result.json"
+        if not result_path.parent.exists():
+            result_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(result_path, "w") as f:
+            json.dump(extraction, f, indent=2)

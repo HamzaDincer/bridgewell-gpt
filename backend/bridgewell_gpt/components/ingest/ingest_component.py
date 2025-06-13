@@ -141,11 +141,14 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
 
     def _background_save_docs(self, file_name: str, stored_file_path: Path, doc_id: str) -> None:
         """Save documents to index in the background and perform RAG extraction."""
+        # Move phase update to 'parsing' here, before starting the thread
+        DocumentTypeService().update_document_phase(doc_id, "parsing")
         def update_phase(doc_id: str, phase: str):
             DocumentTypeService().update_document_phase(doc_id, phase)
             logger.info(f"[PHASE UPDATE] doc_id={doc_id} phase={phase}")
 
-        def save_task():
+        def save_task(doc_id_arg=doc_id):
+            doc_id = doc_id_arg
             try:
                 update_phase(doc_id, "parsing")
                 logger.debug("Saving the documents in the index and doc store")
@@ -164,7 +167,7 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                         doc.metadata["doc_id"] = doc_id
 
                     # Extract the document using the injected component
-                    extraction = self.extraction_component.extract_document(documents, "Benefit", file_name)
+                    extraction = self.extraction_component.extract_document(documents, "Benefit", file_name, doc_id)
                     logger.info(f"Extraction: {extraction}")
 
                     update_phase(doc_id, "embedding")
@@ -198,10 +201,9 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                             return
 
                         # Get the extraction result from metadata
-                        extraction_id = documents[0].metadata.get("extraction_id")
-                        logger.info(f"Retrieved extraction_id={extraction_id} from document metadata")
-                        if not extraction_id:
-                            logger.warning("No extraction ID found in document metadata")
+                        logger.info(f"Using doc_id={doc_id} for RAG extraction")
+                        if not doc_id:
+                            logger.warning("No doc_id available for RAG extraction")
                             return
 
                         # Get document type for company config
@@ -211,7 +213,7 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                             return
 
                         # Load the extraction result file
-                        result_file = local_data_path / "extraction_results" / extraction_id / "result.json"
+                        result_file = local_data_path / "extraction_results" / doc_id / "result.json"
                         logger.info(f"Looking for result file at: {result_file}")
                         if not result_file.exists():
                             logger.warning(f"Extraction result file not found: {result_file}")
@@ -277,33 +279,29 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
 
                             # Update extraction result with RAG results
                             def deep_update(d: dict, u: dict) -> dict:
+                                if not isinstance(u, dict):
+                                    return d
                                 for k, v in u.items():
                                     if isinstance(v, dict):
-                                        d[k] = deep_update(d.get(k, {}), v)
+                                        # If d[k] is not a dict or is empty, replace it entirely
+                                        if not isinstance(d.get(k), dict) or not d.get(k):
+                                            d[k] = v
+                                        else:
+                                            d[k] = deep_update(d.get(k, {}), v)
                                     else:
-                                        if k in d and d[k] is None:  # Only update if original value is None
-                                            # Create a proper extraction field structure
-                                            if isinstance(v, dict) and all(key in v for key in ["value", "page", "coordinates", "source_snippet"]):
-                                                # If v already has the correct structure, use it as is
-                                                d[k] = v
-                                            else:
-                                                # Otherwise create the structure
-                                                d[k] = {
-                                                    "value": v.get("value", v) if isinstance(v, dict) else v,
-                                                    "page": v.get("page", None) if isinstance(v, dict) else None,
-                                                    "coordinates": v.get("coordinates", None) if isinstance(v, dict) else None,
-                                                    "source_snippet": v.get("source_snippet", None) if isinstance(v, dict) else None
-                                                }
+                                        d[k] = v
                                 return d
 
-                            final_data = deep_update(extraction_result, rag_results)
-                            
-                            # Update the extraction result file
-                            extraction_data["result"] = final_data
-                            with open(result_file, 'w') as f:
-                                json.dump(extraction_data, f, indent=2)
-                                
-                            logger.info("Successfully updated extraction results with RAG data")
+                            logger.info(f"RAG results type: {type(rag_results)}; value: {repr(rag_results)}")
+                            # Only update if both extraction_result and rag_results are dicts
+                            if isinstance(extraction_result, dict) and isinstance(rag_results, dict):
+                                final_data = deep_update(extraction_result, rag_results)
+                                extraction_data["result"] = final_data
+                                with open(result_file, 'w') as f:
+                                    json.dump(extraction_data, f, indent=2)
+                                logger.info("Successfully updated extraction results with RAG data")
+                            else:
+                                logger.error(f"Cannot update extraction results: extraction_result is {type(extraction_result)}, rag_results is {type(rag_results)}")
                         else:
                             logger.info("No missing fields found, skipping RAG extraction")
 
@@ -314,10 +312,14 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                         update_phase(doc_id, "completed")
             except Exception as e:
                 logger.error(f"Error in save task: {str(e)}")
-                update_phase(doc_id, "completed")
+                if doc_id is not None:
+                    update_phase(doc_id, "error")
+            finally:
+                if doc_id is not None:
+                    update_phase(doc_id, "completed")
 
         import threading
-        thread = threading.Thread(target=save_task)
+        thread = threading.Thread(target=save_task, args=(doc_id,))
         thread.start()
 
     def bulk_ingest(self, files: list[tuple[str, Path]]) -> list[Document]:

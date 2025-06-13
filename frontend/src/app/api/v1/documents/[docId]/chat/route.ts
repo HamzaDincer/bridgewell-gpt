@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Record<string, string> },
-) {
+export async function POST(req: NextRequest, { params }: any) {
   const body = await req.json();
   const docId = params.docId;
 

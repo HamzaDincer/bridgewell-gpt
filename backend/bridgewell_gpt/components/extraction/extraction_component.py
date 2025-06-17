@@ -7,6 +7,7 @@ from pathlib import Path
 import tempfile
 from injector import singleton
 from llama_cloud_services import LlamaExtract
+from llama_cloud_services.extract import ExtractConfig
 from llama_index.core.schema import Document
 from dotenv import load_dotenv
 from bridgewell_gpt.paths import local_data_path
@@ -90,9 +91,11 @@ class ExtractionComponent:
                 logger.info("Successfully retrieved existing benefit-summary-parser agent")
             except Exception as e:
                 logger.info(f"Agent not found, creating new one: {str(e)}")
+                config = ExtractConfig(extraction_mode="FAST")
                 benefit_agent = self.llama_extract.create_agent(
                     name="benefit-summary-parser",
-                    data_schema=InsuranceSummary
+                    data_schema=InsuranceSummary,
+                    config=config
                 )
             
             # Save content to temporary JSON file and extract
@@ -109,12 +112,12 @@ class ExtractionComponent:
                     extraction_result = benefit_agent.extract(temp_path)
                     result = extraction_result.data
                     
-                    logger.info("Extraction completed successfully")
-                    logger.debug("Extraction result: %s", json.dumps(result, indent=2))
+                    logger.debug("Extraction completed successfully")
+                    logger.debug(f"Extraction result: %s", json.dumps(result, indent=2))
                     
                     # Store the successful result
                     result_path = self.storage_path / doc_id / "result.json"
-                    logger.info(f"Storing extraction result at: {result_path}")
+                    logger.debug(f"Storing extraction result at: {result_path}")
                     result_path.parent.mkdir(parents=True, exist_ok=True)
                     
                     with open(result_path, "w") as f:
@@ -128,7 +131,7 @@ class ExtractionComponent:
                             "timestamp": datetime.datetime.now().isoformat()
                         }, f, indent=2)
                     
-                    logger.info(f"Successfully stored extraction result for ID: {extraction_id}")
+                    logger.debug(f"Successfully stored extraction result for ID: {extraction_id}")
                     
                     return {
                         "extraction_id": extraction_id,

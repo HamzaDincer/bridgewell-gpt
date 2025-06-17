@@ -87,11 +87,11 @@ class ExtractionService:
     def _extract_with_gpt(self, text: str, section_type: str, company_config: dict | None = None) -> dict:
         """Extract structured data from section text using GPT."""
         try:
-            logger.info(f"Starting GPT extraction for section type: {section_type}")
+            logger.debug(f"Starting GPT extraction for section type: {section_type}")
             
             # Map the document section type to structure.json section type using company config
             structure_type = self._map_section_type_to_structure(section_type, company_config)
-            logger.info(f"Mapped to structure type: {structure_type}")
+            logger.debug(f"Mapped to structure type: {structure_type}")
             
             # Get only the relevant section structure
             structure = self._load_json_structure(structure_type)
@@ -99,7 +99,7 @@ class ExtractionService:
                 logger.warning(f"No structure found for section type: {structure_type}")
                 return {}
             
-            logger.info(f"Loaded structure: {json.dumps(structure, indent=2)}")
+            logger.debug(f"Loaded structure: {json.dumps(structure, indent=2)}")
             
             # Get company-specific field prompts if available
             field_prompts = {}
@@ -110,7 +110,7 @@ class ExtractionService:
                     mapped_section = self._map_section_type_to_structure(section_name, company_config)
                     if mapped_section == structure_type and "fields" in section_info:
                         field_prompts = section_info["fields"]
-                        logger.info(f"Found field prompts for section {structure_type}: {list(field_prompts.keys())}")
+                        logger.debug(f"Found field prompts for section {structure_type}: {list(field_prompts.keys())}")
                         break
             
             # Build a detailed prompt with field-specific instructions and examples
@@ -126,12 +126,29 @@ class ExtractionService:
                     instruction += f"\n  Examples: {json.dumps(field_examples, indent=2)}"
                 field_instructions.append(instruction)
 
-            system_prompt = f"""
-            You are an AI assistant specialized in extracting insurance details from documents. 
-            Your task is to find the information in the document. 
-            You can only answer questions about the provided text. If you know the answer but it is not based in the provided text, respond with 'null'.
-            If the requested data is not found in the document, respond with 'null'. 
-            Respond concisely only with the formatted value given examples in the prompt, no other text or explanations."""
+            system_prompt = (
+                "You are an AI assistant specialized in extracting specific insurance benefit details from documents. "
+                "Your task is to find and extract exact values and their locations from the document text. "
+                "Only return information that is explicitly stated in the document. "
+                "You must return the information in the exact JSON format specified. "
+                "If you cannot find the specific information, respond with 'null'. "
+                "Do not include any explanations or additional text in your response. "
+                "Be thorough in your search - check all sections of the document as the information might be in unexpected places. "
+                "\n\n"
+                "Instructions: "
+                "1. Find and return the following information: "
+                "- The exact value from the document (see user prompt for details) "
+                "- The page number where the value was found (0-based) "
+                "- The coordinates of the value on the page (if available) "
+                "- The surrounding text or context where the value was found "
+                "2. Return the information in this exact JSON format: "
+                '{ "value": "extracted value", "page": page_number, "coordinates": { "x": x_coordinate, "y": y_coordinate, "width": width, "height": height, "page": page_number }, "source_snippet": "surrounding text" } '
+                "3. If any piece of information is not available, use null for that field. "
+                "4. If the information is not found at all, return null. "
+                "5. Do not make assumptions or infer values. "
+                "6. Look for the information in any relevant section. "
+                "Return only the JSON object, no other text."
+            )
             
             prompt = f"""
             Extract information from this insurance benefit section into the following JSON structure.
@@ -149,18 +166,18 @@ class ExtractionService:
             Return only the JSON object, no other text.
             """
             
-            logger.info("Sending request to chat service")
+            logger.debug("Sending request to chat service")
             messages = [
                 ChatMessage(role=MessageRole.SYSTEM, content=system_prompt),
                 ChatMessage(role=MessageRole.USER, content=prompt)
             ]
             
             completion = self._chat_service.chat(messages=messages)
-            logger.info("Received response from chat service")
+            logger.debug("Received response from chat service")
             
             # Clean up the response to extract just the JSON
             response_text = completion.response.strip()
-            logger.info(f"Raw response: {response_text[:200]}...")  # Log first 200 chars
+            logger.debug(f"Raw response: {response_text[:200]}...")  # Log first 200 chars
             
             # Remove markdown code block markers if present
             if response_text.startswith("```json"):
@@ -178,7 +195,7 @@ class ExtractionService:
             # Try to parse the cleaned JSON
             try:
                 result = json.loads(response_text)
-                logger.info(f"Successfully parsed JSON: {json.dumps(result, indent=2)}")
+                logger.debug(f"Successfully parsed JSON: {json.dumps(result, indent=2)}")
                 return result
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse JSON response: {response_text}")
@@ -190,11 +207,11 @@ class ExtractionService:
             logger.error(f"Text being processed: {text[:200]}...")  # Log first 200 chars of text
             return {}
 
-    def _extract_with_rag(self, file_name: str, missing_fields: list[str], company_config: dict | None = None) -> dict:
+    def _extract_with_rag(self, doc_id: str, missing_fields: list[str], company_config: dict | None = None) -> dict:
         """Use RAG to find specific missing fields.
         
         Args:
-            file_name: Name of the file to analyze
+            doc_id: Document ID to analyze
             missing_fields: List of field paths to extract (can include nested paths like 'life_insurance.schedule')
             company_config: Optional company-specific configuration
             
@@ -206,10 +223,10 @@ class ExtractionService:
         try:
             # Get the document IDs from ingested documents
             ingested_docs = self._ingest_service.list_ingested()
-            doc_ids = [doc.doc_id for doc in ingested_docs if doc.doc_metadata.get('file_name') == file_name]
+            doc_ids = [doc.doc_id for doc in ingested_docs if doc.doc_id == doc_id]
             
             if not doc_ids:
-                logger.error(f"No ingested document found for file: {file_name}")
+                logger.error(f"No ingested document found for doc_id: {doc_id}")
                 return results
                 
             # Group fields by their parent path for more efficient extraction
@@ -229,7 +246,7 @@ class ExtractionService:
                         field_groups[''] = []
                     field_groups[''].append(field_path)
             
-            logger.info(f"Grouped fields for RAG extraction: {json.dumps(field_groups, indent=2)}")
+            logger.debug(f"Grouped fields for RAG extraction: {json.dumps(field_groups, indent=2)}")
             
             # Process each group of fields
             for parent, fields in field_groups.items():
@@ -242,7 +259,7 @@ class ExtractionService:
                 if company_config and "benefit_headers" in company_config:
                     # Get prompts for this section
                     section_prompts = company_config["benefit_headers"].get(parent, {}).get("fields", {})
-                    logger.info(f"Found prompts for section {parent}: {list(section_prompts.keys())}")
+                    logger.debug(f"Found prompts for section {parent}: {list(section_prompts.keys())}")
                 
                 for field in fields:
                     # Get field-specific prompt and examples from company config
@@ -257,60 +274,47 @@ class ExtractionService:
                                     field_info = section_info["fields"][field]
                                     field_prompt = field_info.get("prompt")
                                     field_examples = field_info.get("examples", [])
-                                    logger.info(f"\nFound config for {parent}.{field}:")
-                                    logger.info(f"  Prompt: {field_prompt}")
-                                    logger.info(f"  Examples: {field_examples}")
+                                    logger.debug(f"\nFound config for {parent}.{field}:")
+                                    logger.debug(f"  Prompt: {field_prompt}")
+                                    logger.debug(f"  Examples: {field_examples}")
                                 break
                     
                     if not field_prompt:
                         field_prompt = f"Find the {field} in the {parent} section"
-                        logger.info(f"\nUsing default prompt for {parent}.{field}: {field_prompt}")
+                        logger.debug(f"\nUsing default prompt for {parent}.{field}: {field_prompt}")
                     
                     examples_text = ""
                     if field_examples:
                         examples_text = "\nExample values:\n" + "\n".join(f"- {ex}" for ex in field_examples)
                     
-                    prompt = f"""
-                        {field_prompt}
-                        
-                        Important:
-                        1. Extract the following information:
-                           - The exact value from the document
-                           - The page number where the value was found (0-based)
-                           - The coordinates of the value on the page (if available)
-                           - The surrounding text or context where the value was found
-                        2. Return the information in this exact JSON format:
-                           {{
-                             "value": "extracted value",
-                             "page": page_number,
-                             "coordinates": {{
-                               "x": x_coordinate,
-                               "y": y_coordinate,
-                               "width": width,
-                               "height": height,
-                               "page": page_number
-                             }},
-                             "source_snippet": "surrounding text"
-                           }}
-                        3. If any piece of information is not available, use null for that field
-                        4. If the information is not found at all, return null
-                        5. Do not make assumptions or infer values
-                        6. Look for the information in any relevant section
-                        {examples_text}
-                    """
+                    prompt = f"{field_prompt} {examples_text}"
                     
-                    logger.info(f"\nFinal prompt for {parent}.{field}:")
-                    logger.info(prompt)
+                    logger.debug(f"\nFinal prompt for {parent}.{field}:")
+                    logger.debug(prompt)
                     
-                    system_prompt = """
-                        You are an AI assistant specialized in extracting specific insurance benefit details from documents.
-                        Your task is to find and extract exact values and their locations from the document text.
-                        Only return information that is explicitly stated in the document.
-                        You must return the information in the exact JSON format specified.
-                        If you cannot find the specific information, respond with 'null'.
-                        Do not include any explanations or additional text in your response.
-                        Be thorough in your search - check all sections of the document as the information might be in unexpected places.
-                    """
+                    system_prompt = (
+                        "You are an AI assistant specialized in extracting specific insurance benefit details from documents. "
+                        "Your task is to find and extract exact values and their locations from the document text. "
+                        "Only return information that is explicitly stated in the document. "
+                        "You must return the information in the exact JSON format specified. "
+                        "If you cannot find the specific information, respond with 'null'. "
+                        "Do not include any explanations or additional text in your response. "
+                        "Be thorough in your search - check all sections of the document as the information might be in unexpected places. "
+                        "\n\n"
+                        "Instructions: "
+                        "1. Find and return the following information: "
+                        "- The exact value from the document (see user prompt for details) "
+                        "- The page number where the value was found (0-based) "
+                        "- The coordinates of the value on the page (if available) "
+                        "- The surrounding text or context where the value was found "
+                        "2. Return the information in this exact JSON format: "
+                        '{ "value": "extracted value", "page": page_number, "coordinates": { "x": x_coordinate, "y": y_coordinate, "width": width, "height": height, "page": page_number }, "source_snippet": "surrounding text" } '
+                        "3. If any piece of information is not available, use null for that field. "
+                        "4. If the information is not found at all, return null. "
+                        "5. Do not make assumptions or infer values. "
+                        "6. Look for the information in any relevant section. "
+                        "Return only the JSON object, no other text."
+                    )
             
                     try:
                         messages = [
@@ -339,15 +343,15 @@ class ExtractionService:
                         except (AttributeError, IndexError) as e:
                             logger.debug(f"Could not get source text: {str(e)}")
                         
-                        logger.info(f"\nRAG response for {parent}.{field}:")
-                        logger.info(f"Response: {response_text}")
-                        logger.info(f"Source text: {source_text}")
+                        logger.debug(f"\nRAG response for {parent}.{field}:")
+                        logger.debug(f"Response: {response_text}")
+                        logger.debug(f"Source text: {source_text}")
                         
                         # Clean up response text - remove markdown code block tags
                         if response_text:
                             # Remove ```json and ``` tags
                             response_text = response_text.replace('```json', '').replace('```', '').strip()
-                            logger.info(f"Cleaned response: {response_text}")
+                            logger.debug(f"Cleaned response: {response_text}")
                         
                         # Parse the response as JSON if possible
                         try:
@@ -361,11 +365,11 @@ class ExtractionService:
                                         results[parent][field] = parsed_response
                                     else:
                                         results[field] = parsed_response
-                                    logger.info(f"Found structured value for {parent}.{field}: {parsed_response}")
+                                    logger.debug(f"Found structured value for {parent}.{field}: {parsed_response}")
                                 else:
                                     logger.warning(f"Response was not a dictionary: {response_text}")
                             else:
-                                logger.info(f"No value found for {parent}.{field}")
+                                logger.debug(f"No value found for {parent}.{field}")
                                 if parent:
                                     if parent not in results:
                                         results[parent] = {}
@@ -484,7 +488,7 @@ class ExtractionService:
             
             # Copy the file
             shutil.copy2(source_path, target_path)
-            logger.info(f"Stored PDF at: {target_path}")
+            logger.debug(f"Stored PDF at: {target_path}")
             
             return target_path
         
@@ -512,33 +516,34 @@ class ExtractionService:
                 logger.error(f"Original file not found: {original_pdf_path}")
                 raise FileNotFoundError(f"Original file not found: {file_name}")
 
-            logger.info(f"Processing full PDF document: {original_pdf_path}")
+            logger.debug(f"Processing full PDF document: {original_pdf_path}")
 
             try:
                 benefit_agent = extractor.get_agent("benefit-summary-parser")
-                logger.info("Successfully retrieved existing benefit-summary-parser agent")
+                logger.debug("Successfully retrieved existing benefit-summary-parser agent")
             except Exception as e:
-                logger.info(f"Agent not found, creating new one: {str(e)}")
+                logger.debug(f"Agent not found, creating new one: {str(e)}")
                 benefit_agent = extractor.create_agent(
                     name="benefit-summary-parser",
-                    data_schema=InsuranceSummary
+                    data_schema=InsuranceSummary,
+                    config={"extraction_mode": "FAST"}
                 )
             
             # Extract data from the entire original PDF
             extraction_result = benefit_agent.extract(str(original_pdf_path))
-            logger.info("Successfully extracted initial data with benefit-summary-parser agent")
+            logger.debug("Successfully extracted initial data with benefit-summary-parser agent")
             initial_data = extraction_result.data
             
             # Check for missing fields and use RAG to fill them
             missing_fields = self._has_missing_fields(initial_data, InsuranceSummary)
             
             if missing_fields:
-                logger.info(f"Found {len(missing_fields)} missing fields, using RAG to extract them")
+                logger.debug(f"Found {len(missing_fields)} missing fields, using RAG to extract them")
                 # Load company config if available
                 company_config = self._load_company_config(company_name)
                 
                 # Wait for embeddings to finish before proceeding with RAG
-                logger.info("Waiting for embeddings to complete before RAG extraction")
+                logger.debug("Waiting for embeddings to complete before RAG extraction")
                 ingested_docs = self._ingest_service.list_ingested()
                 doc_ids = [doc.doc_id for doc in ingested_docs if doc.doc_metadata.get('file_name') == file_name]
                 
@@ -553,7 +558,7 @@ class ExtractionService:
                         ingested_docs = self._ingest_service.list_ingested()
                         doc_ids = [doc.doc_id for doc in ingested_docs if doc.doc_metadata.get('file_name') == file_name]
                         if doc_ids:
-                            logger.info("Documents found after waiting for embeddings")
+                            logger.debug("Documents found after waiting for embeddings")
                             break
                     else:
                         logger.error("Embeddings not completed after maximum retries")
@@ -561,7 +566,7 @@ class ExtractionService:
                 
                 # Extract missing fields using RAG with ingested document
                 rag_results = self._extract_with_rag(
-                    file_name=file_name,
+                    doc_id=file_name,
                     missing_fields=missing_fields,
                     company_config=company_config
                 )
@@ -577,16 +582,16 @@ class ExtractionService:
                     return d
                 
                 final_data = deep_update(initial_data, rag_results)
-                logger.info("Successfully merged RAG results with initial data")
+                logger.debug("Successfully merged RAG results with initial data")
             else:
-                logger.info("No missing fields found, using initial extraction data")
+                logger.debug("No missing fields found, using initial extraction data")
                 final_data = initial_data
             
             # Create the comparison document
             template = BenefitComparisonTemplate()
             output_path = template.fill(final_data)
             
-            logger.info(f"Successfully created benefit comparison at {output_path}")
+            logger.debug(f"Successfully created benefit comparison at {output_path}")
             return output_path, final_data
 
         except Exception as e:

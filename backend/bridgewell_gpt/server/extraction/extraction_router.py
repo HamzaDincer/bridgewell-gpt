@@ -40,6 +40,14 @@ class ExtractPagesResponse(BaseModel):
 class RagExtractionRequest(BaseModel):
     missing_fields: List[str]
 
+class RagTestRequest(BaseModel):
+    doc_id: str
+    field: str
+    file_name: str | None = None
+
+class RagTestResponse(BaseModel):
+    status: str
+    result: dict
 
 @extraction_router.post("/extract/{file_name}", tags=["Extraction"])
 async def extract_benefit_summary_direct(
@@ -207,3 +215,83 @@ async def export_excel(request: Request):
         filename="benefit_comparison.xlsx",
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
+@extraction_router.post("/extract/chunks/{doc_id}", tags=["Extraction"])
+async def extract_from_chunks(
+    request: Request,
+    doc_id: str,
+    document_type: str = "Benefit"
+) -> dict:
+    """Run extraction directly from chunks.json for a given doc_id, bypassing parsing and embedding."""
+    from bridgewell_gpt.components.extraction.extraction_component import ExtractionComponent
+    from bridgewell_gpt.server.extraction.insurance_schema import InsuranceSummary
+    from bridgewell_gpt.paths import local_data_path
+    import tempfile
+    import json
+    import os
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    # Locate chunks.json
+    chunks_path = local_data_path / "extraction_results" / doc_id / "chunks.json"
+    if not chunks_path.exists():
+        raise HTTPException(status_code=404, detail=f"chunks.json not found for doc_id {doc_id}")
+    
+    with open(chunks_path, "r") as f:
+        chunks_data = json.load(f)
+    chunks = chunks_data.get("chunks", [])
+    
+    # Prepare content for extraction
+    content = {"chunks": chunks}
+    
+    # Use the same agent logic as in ExtractionComponent
+    from llama_cloud_services import LlamaExtract
+    from llama_cloud_services.extract import ExtractConfig
+    llama_extract = LlamaExtract()
+    try:
+        benefit_agent = llama_extract.get_agent("benefit-summary-parser")
+    except Exception as e:
+        config = ExtractConfig(extraction_mode="FAST")
+        benefit_agent = llama_extract.create_agent(
+            name="benefit-summary-parser",
+            data_schema=InsuranceSummary,
+            config=config
+        )
+    
+    # Write content to a temp file and extract
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+        temp_path = temp_file.name
+        json.dump(content, temp_file)
+        temp_file.flush()
+        try:
+            extraction_result = benefit_agent.extract(temp_path)
+            result = extraction_result.data
+        finally:
+            os.unlink(temp_path)
+    
+    return {
+        "status": "completed",
+        "result": result
+    }
+
+@extraction_router.post("/rag/test", response_model=RagTestResponse, tags=["Extraction"])
+async def test_rag_extraction(
+    request: Request,
+    rag_request: RagTestRequest
+) -> RagTestResponse:
+    """Test RAG extraction for a specific field using the general config and doc_id."""
+    try:
+        service = request.state.injector.get(ExtractionService)
+        # Always use the general config for this endpoint
+        company_config = service._load_company_config("general")
+        # Call RAG extraction for the requested field using doc_id
+        rag_result = service._extract_with_rag(
+            doc_id=rag_request.doc_id,
+            missing_fields=[rag_request.field],
+            company_config=company_config
+        )
+        return RagTestResponse(status="success", result=rag_result)
+    except Exception as e:
+        logger.error(f"Error in RAG test extraction: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"RAG test extraction failed: {str(e)}")

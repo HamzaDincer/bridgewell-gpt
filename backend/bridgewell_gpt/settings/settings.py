@@ -236,6 +236,10 @@ class EmbeddingSettings(BaseModel):
         384,
         description="The dimension of the embeddings stored in the Postgres database",
     )
+    batch_size: int = Field(
+        32,
+        description="Batch size for embedding model calls. Tune for your hardware/API."
+    )
 
 
 class SagemakerSettings(BaseModel):

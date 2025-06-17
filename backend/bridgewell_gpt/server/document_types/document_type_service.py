@@ -15,7 +15,7 @@ class DocumentTypeService:
     def __init__(self):
         self._data_path = local_data_path / "document_types.json"
         self._ensure_data_file()
-        logger.info(f"DocumentTypeService initialized, using data file: {self._data_path}")
+        logger.debug(f"DocumentTypeService initialized, using data file: {self._data_path}")
 
     def _ensure_data_file(self):
         """Creates the data file with an empty list if it doesn't exist or is empty (0 bytes)."""
@@ -24,13 +24,13 @@ class DocumentTypeService:
                 self._data_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(self._data_path, 'w') as f:
                     json.dump([], f)
-                logger.info(f"Created empty document types data file: {self._data_path}")
+                logger.debug(f"Created empty document types data file: {self._data_path}")
             else:
                 # If file exists but is empty (0 bytes), repair it
                 if self._data_path.stat().st_size == 0:
                     with open(self._data_path, 'w') as f:
                         json.dump([], f)
-                    logger.info(f"Repaired empty document types data file: {self._data_path}")
+                    logger.debug(f"Repaired empty document types data file: {self._data_path}")
         except Exception as e:
             logger.error(f"Error ensuring data file {self._data_path}: {e}", exc_info=True)
             raise
@@ -63,14 +63,14 @@ class DocumentTypeService:
 
     def get_document_types(self) -> List[DocumentTypeResponse]:
         """Retrieve document types from the JSON file."""
-        logger.info("DocumentTypeService: Fetching document types from file")
+        logger.debug("DocumentTypeService: Fetching document types from file")
         data = self._load_data()
         # Convert dicts to the Pydantic response model
         return [DocumentTypeResponse(**item) for item in data]
 
     def create_document_type(self, type_create: DocumentTypeCreate) -> dict:
         """Creates a new document type and saves it to the JSON file. Returns a dict with alreadyExists flag."""
-        logger.info(f"DocumentTypeService: Creating document type '{type_create.title}'")
+        logger.debug(f"DocumentTypeService: Creating document type '{type_create.title}'")
         data = self._load_data()
         # Check for existing title
         if any(item['title'].lower() == type_create.title.lower() for item in data):
@@ -92,12 +92,12 @@ class DocumentTypeService:
         }
         data.append(new_type_data)
         self._save_data(data)
-        logger.info(f"Successfully created document type ID {new_id} with title '{type_create.title}'")
+        logger.debug(f"Successfully created document type ID {new_id} with title '{type_create.title}'")
         return {"alreadyExists": False, "type": DocumentTypeResponse(**new_type_data)}
 
     def add_document(self, type_id: int, document: DocumentCreate) -> DocumentTypeResponse:
         """Add a document to a document type."""
-        logger.info(f"DocumentTypeService: Adding document '{document.doc_name}' to type {type_id}")
+        logger.debug(f"DocumentTypeService: Adding document '{document.doc_name}' to type {type_id}")
         data = self._load_data()
         # Find the document type
         type_data = next((item for item in data if item['id'] == type_id), None)
@@ -118,12 +118,12 @@ class DocumentTypeService:
         type_data['documents'].append(new_doc)
         type_data['uploaded'] = len(type_data['documents'])
         self._save_data(data)
-        logger.info(f"Successfully added document to type {type_id}")
+        logger.debug(f"Successfully added document to type {type_id}")
         return DocumentTypeResponse(**type_data)
 
     def get_documents(self, type_id: int) -> List[DocumentResponse]:
         """Get all documents for a document type, using the stored phase."""
-        logger.info(f"DocumentTypeService: Getting documents for type {type_id}")
+        logger.debug(f"DocumentTypeService: Getting documents for type {type_id}")
         data = self._load_data()
         # Find the document type
         type_data = next((item for item in data if item['id'] == type_id), None)
@@ -157,7 +157,7 @@ class DocumentTypeService:
                 if doc['id'] == doc_id:
                     doc['phase'] = phase
                     self._save_data(data)
-                    logger.info(f"Updated phase for doc_id={doc_id} to {phase}")
+                    logger.debug(f"Updated phase for doc_id={doc_id} to {phase}")
                     return
         logger.warning(f"Document with id={doc_id} not found for phase update.")
 

@@ -168,7 +168,7 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
 
                     # Extract the document using the injected component
                     extraction = self.extraction_component.extract_document(documents, "Benefit", file_name, doc_id)
-                    logger.info(f"Extraction: {extraction}")
+                    logger.debug(f"Extraction: {extraction}")
 
                     update_phase(doc_id, "embedding")
                     # Store extraction result in document metadata
@@ -238,9 +238,9 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                         if missing_fields:
                             logger.info(f"Found {len(missing_fields)} missing fields, using RAG to extract them")
                             # Extract missing fields using RAG with company config
-                            company_config = extraction_service._load_company_config("rbc")  # Default to RBC config for now
+                            company_config = extraction_service._load_company_config("general")  # Default to general config for now
                             rag_results = extraction_service._extract_with_rag(
-                                file_name=doc_file_name,
+                                doc_id=doc_id,
                                 missing_fields=missing_fields,
                                 company_config=company_config
                             )
@@ -422,6 +422,8 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
 
     This use the CPU and GPU in parallel (both running at the same time), and
     reduce the memory pressure by not loading all the files in memory at the same time.
+    
+    Now supports extraction, RAG, and document phase tracking for feature parity with SimpleIngestComponent.
     """
 
     def __init__(
@@ -430,6 +432,9 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
         embed_model: EmbedType,
         transformations: list[TransformComponent],
         count_workers: int,
+        extraction_component: ExtractionComponent = None,  # Add extraction component
+        ingest_service: Any = None,  # Add ingest service
+        chat_service: Any = None,  # Add chat service
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -452,30 +457,254 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
         self._file_to_documents_work_pool = multiprocessing.Pool(
             processes=self.count_workers
         )
+        
+        # Add extraction and service components
+        self.extraction_component = extraction_component
+        self._ingest_service = ingest_service
+        self._chat_service = chat_service
+        self._rag_thread_lock = threading.Lock()
 
     def ingest(self, file_name: str, file_data: Path) -> list[Document]:
         logger.info("Ingesting file_name=%s", file_name)
-        # Running in a single (1) process to release the current
-        # thread, and take a dedicated CPU core for computation
-        documents = self._file_to_documents_work_pool.apply(
-            IngestionHelper.transform_file_into_documents, (file_name, file_data)
-        )
-        logger.info(
-            "Transformed file=%s into count=%s documents", file_name, len(documents)
-        )
-        logger.debug("Saving the documents in the index and doc store")
-        return self._save_docs(documents)
+        
+        # Store original file
+        stored_file_path = IngestionHelper.store_original_file(file_name, file_data)
+        
+        # Generate doc_id
+        doc_id = str(uuid.uuid4())
+        
+        # Return a stub Document object for compatibility
+        doc = Document(text="", metadata={"file_name": file_name, "doc_id": doc_id})
+        doc.doc_id = doc_id
+        
+        # If extraction is enabled, use background processing
+        if self.extraction_component:
+            self._background_save_docs(file_name, stored_file_path, doc_id)
+            return [doc]
+        else:
+            # Fall back to original parallel processing without extraction
+            documents = self._file_to_documents_work_pool.apply(
+                IngestionHelper.transform_file_into_documents, (file_name, stored_file_path)
+            )
+            logger.info(
+                "Transformed file=%s into count=%s documents", file_name, len(documents)
+            )
+            logger.debug("Saving the documents in the index and doc store")
+            return self._save_docs(documents)
+
+    def _background_save_docs(self, file_name: str, stored_file_path: Path, doc_id: str) -> None:
+        """Save documents to index in the background and perform RAG extraction."""
+        # Update phase to 'parsing' before starting the thread
+        DocumentTypeService().update_document_phase(doc_id, "parsing")
+        
+        def update_phase(doc_id: str, phase: str):
+            DocumentTypeService().update_document_phase(doc_id, phase)
+            logger.info(f"[PHASE UPDATE] doc_id={doc_id} phase={phase}")
+
+        def save_task(doc_id_arg=doc_id):
+            doc_id = doc_id_arg
+            try:
+                update_phase(doc_id, "parsing")
+                logger.debug("Saving the documents in the index and doc store")
+                
+                # Use multiprocessing pool for document transformation
+                documents = self._file_to_documents_work_pool.apply(
+                    IngestionHelper.transform_file_into_documents, (file_name, stored_file_path)
+                )
+                logger.info(
+                    "Transformed file=%s into count=%s documents", file_name, len(documents)
+                )
+                
+                update_phase(doc_id, "extraction")
+                
+                # Generate document IDs before extraction
+                for doc in documents:
+                    doc.doc_id = doc_id
+                    if not doc.metadata:
+                        doc.metadata = {}
+                    doc.metadata["file_name"] = file_name
+                    doc.metadata["doc_id"] = doc_id
+
+                # Extract the document using the injected component
+                extraction = self.extraction_component.extract_document(documents, "Benefit", file_name, doc_id)
+                logger.info(f"Extraction: {extraction}")
+
+                update_phase(doc_id, "embedding")
+                
+                # Store extraction result in document metadata
+                if extraction and extraction.get("status") == "completed":
+                    logger.info(f"Initial extraction successful with ID: {extraction.get('extraction_id')}")
+                    for doc in documents:
+                        if not doc.metadata:
+                            doc.metadata = {}
+                        doc.metadata["extraction"] = extraction.get("result", {})
+                        doc.metadata["extraction_id"] = extraction.get("extraction_id")
+                        doc.metadata["document_type"] = extraction.get("document_type")
+                        logger.debug(f"Set extraction_id={doc.metadata['extraction_id']} for doc_id={doc.doc_id}")
+
+                # Transform documents to nodes in parallel
+                nodes = run_transformations(
+                    documents,
+                    self.transformations,
+                    show_progress=self.show_progress,
+                )
+                
+                # Lock for index insertion
+                with self._index_thread_lock:
+                    logger.info("Inserting count=%s nodes in the index", len(nodes))
+                    self._index.insert_nodes(nodes, show_progress=True)
+                    for document in documents:
+                        self._index.docstore.set_document_hash(
+                            document.get_doc_id(), document.hash
+                        )
+                    logger.debug("Persisting the index and nodes")
+                    self._save_index()
+                    logger.debug("Persisted the index and nodes")
+
+                # After embeddings are complete, perform RAG extraction
+                logger.info("Starting RAG extraction after embeddings")
+                update_phase(doc_id, "rag")
+                
+                with self._rag_thread_lock:
+                    try:
+                        # Get the file name from the first document's metadata
+                        doc_file_name = documents[0].metadata.get("file_name")
+                        if not doc_file_name:
+                            logger.warning("No file name found in document metadata")
+                            return
+
+                        # Get document type for company config
+                        document_type = documents[0].metadata.get("document_type")
+                        if not document_type:
+                            logger.warning("No document type found in document metadata")
+                            return
+
+                        # Load the extraction result file
+                        result_file = local_data_path / "extraction_results" / doc_id / "result.json"
+                        logger.info(f"Looking for result file at: {result_file}")
+                        if not result_file.exists():
+                            logger.warning(f"Extraction result file not found: {result_file}")
+                            return
+
+                        with open(result_file) as f:
+                            extraction_data = json.load(f)
+
+                        extraction_result = extraction_data.get("result", {})
+                        if not extraction_result:
+                            logger.warning("No extraction result found in result file")
+                            return
+
+                        # Check for missing fields
+                        from bridgewell_gpt.server.extraction.extraction_service import ExtractionService
+                        from bridgewell_gpt.server.extraction.insurance_schema import InsuranceSummary
+                        
+                        # Initialize extraction service with both ingest and chat services
+                        extraction_service = ExtractionService(self._ingest_service, self._chat_service)
+                        missing_fields = extraction_service._has_missing_fields(extraction_result, InsuranceSummary)
+
+                        if missing_fields:
+                            logger.info(f"Found {len(missing_fields)} missing fields, using RAG to extract them")
+                            # Extract missing fields using RAG with company config
+                            company_config = extraction_service._load_company_config("rbc")  # Default to RBC config for now
+                            rag_results = extraction_service._extract_with_rag(
+                                file_name=doc_file_name,
+                                missing_fields=missing_fields,
+                                company_config=company_config
+                            )
+
+                            # Log RAG results before updating
+                            logger.info("\n=== RAG Extraction Results Before Merging ===")
+                            try:
+                                if rag_results:
+                                    for section_name, section_data in rag_results.items():
+                                        logger.info(f"\nSection: {section_name}")
+                                        if not section_data:
+                                            logger.info("  No data found")
+                                            continue
+                                            
+                                        if isinstance(section_data, dict):
+                                            for field_name, field_data in section_data.items():
+                                                logger.info(f"\n  Field: {field_name}")
+                                                if field_data is None:
+                                                    logger.info("    Value: None")
+                                                else:
+                                                    try:
+                                                        # Pretty print the field data
+                                                        formatted_data = json.dumps(field_data, indent=4)
+                                                        # Add indentation to each line for better readability
+                                                        indented_data = "\n".join(f"    {line}" for line in formatted_data.split("\n"))
+                                                        logger.info(f"    Data:\n{indented_data}")
+                                                    except Exception as e:
+                                                        logger.info(f"    Raw Value: {field_data}")
+                                        else:
+                                            logger.info(f"  Raw Data: {section_data}")
+                                else:
+                                    logger.info("No RAG results found")
+                            except Exception as e:
+                                logger.error(f"Error logging RAG results: {str(e)}")
+                                logger.error(f"Raw RAG results: {rag_results}")
+
+                            # Update extraction result with RAG results
+                            def deep_update(d: dict, u: dict) -> dict:
+                                if not isinstance(u, dict):
+                                    return d
+                                for k, v in u.items():
+                                    if isinstance(v, dict):
+                                        # If d[k] is not a dict or is empty, replace it entirely
+                                        if not isinstance(d.get(k), dict) or not d.get(k):
+                                            d[k] = v
+                                        else:
+                                            d[k] = deep_update(d.get(k, {}), v)
+                                    else:
+                                        d[k] = v
+                                return d
+
+                            logger.info(f"RAG results type: {type(rag_results)}; value: {repr(rag_results)}")
+                            # Only update if both extraction_result and rag_results are dicts
+                            if isinstance(extraction_result, dict) and isinstance(rag_results, dict):
+                                final_data = deep_update(extraction_result, rag_results)
+                                extraction_data["result"] = final_data
+                                with open(result_file, 'w') as f:
+                                    json.dump(extraction_data, f, indent=2)
+                                logger.info("Successfully updated extraction results with RAG data")
+                            else:
+                                logger.error(f"Cannot update extraction results: extraction_result is {type(extraction_result)}, rag_results is {type(rag_results)}")
+                        else:
+                            logger.info("No missing fields found, skipping RAG extraction")
+
+                        # After RAG (or if skipped), mark as completed
+                        update_phase(doc_id, "completed")
+                    except Exception as e:
+                        logger.error(f"Error during RAG extraction: {str(e)}")
+                        update_phase(doc_id, "completed")
+            except Exception as e:
+                logger.error(f"Error in save task: {str(e)}")
+                if doc_id is not None:
+                    update_phase(doc_id, "error")
+            finally:
+                if doc_id is not None:
+                    update_phase(doc_id, "completed")
+
+        # Start background thread
+        thread = threading.Thread(target=save_task, args=(doc_id,))
+        thread.start()
 
     def bulk_ingest(self, files: list[tuple[str, Path]]) -> list[Document]:
-        # Lightweight threads, used for parallelize the
-        # underlying IO calls made in the ingestion
-
-        documents = list(
-            itertools.chain.from_iterable(
-                self._ingest_work_pool.starmap(self.ingest, files)
+        # If extraction is enabled, process files individually to handle extraction
+        if self.extraction_component:
+            saved_documents = []
+            for file_name, file_data in files:
+                docs = self.ingest(file_name, file_data)
+                saved_documents.extend(docs)
+            return saved_documents
+        else:
+            # Original parallel bulk ingestion without extraction
+            documents = list(
+                itertools.chain.from_iterable(
+                    self._ingest_work_pool.starmap(self.ingest, files)
+                )
             )
-        )
-        return documents
+            return documents
 
     def _save_docs(self, documents: list[Document]) -> list[Document]:
         logger.debug("Transforming count=%s documents into nodes", len(documents))
@@ -699,6 +928,9 @@ def get_ingestion_component(
             embed_model=embed_model,
             transformations=transformations,
             count_workers=settings.embedding.count_workers,
+            extraction_component=ExtractionComponent(),
+            ingest_service=ingest_service,
+            chat_service=chat_service,
         )
     elif ingest_mode == "pipeline":
         return PipelineIngestComponent(

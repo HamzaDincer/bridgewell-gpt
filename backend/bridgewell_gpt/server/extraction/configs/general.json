@@ -1,0 +1,435 @@
+{
+  "company": "General",
+  "benefit_headers": {
+    "life_insurance": {
+      "headers": [
+        "LIFE INSURANCE",
+        "BASIC LIFE",
+        "EMPLOYEE LIFE",
+        "GROUP LIFE INSURANCE"
+      ],
+      "fields": {
+        "schedule": {
+          "prompt": "Extract the insurance amount for the Life Insurance Benefit. Return the response in this format: Flat $[amount] (e.g., Flat $20,000) or $[multiplier] of Annual Salary  $[maximum amount]",
+          "format": "string",
+          "examples": [
+            "Flat $20,000",
+            "2x Annual Salary to maximum $500,000",
+            "3.0 times the Employee's annual Salary"
+          ]
+        },
+        "reduction": {
+          "prompt": "Extract the age-based reduction clause for the Life Insurance Benefit. Return it in this format: Reduces by [percentage]% at age [age], further reduces to [amount] or [percentage]% at [age]",
+          "format": "string",
+          "examples": [
+            "Reduces by 50% at age 65",
+            "Reduces by 50% at age 65, further reduces to $10,000 at age 70"
+          ]
+        },
+        "non_evidence_maximum": {
+          "prompt": "Extract the insurance amount that does not require medical evidence for the Life Insurance Benefit. If not explicitly stated, find the insurance amount for the Life Insurance Benefit. Return it as a dollar value in this format: $[amount]",
+          "format": "string",
+          "examples": ["$25,000", "$50,000", "$250,000"]
+        },
+        "termination_age": {
+          "prompt": "Extract the age at which Life Insurance coverage terminates. Return it in this format: [age]",
+          "format": "string",
+          "examples": ["65", "70", "75", "Earlier of retirement or age 75"]
+        }
+      }
+    },
+    "dependent_life": {
+      "headers": [
+        "DEPENDENT LIFE",
+        "DEPENDENT LIFE INSURANCE",
+        "DEPENDENT'S LIFE INSURANCE"
+      ],
+      "fields": {
+        "schedule": {
+          "prompt": "Find the amount of insurance for dependent life insurance. Look for specific amounts for spouse and children.",
+          "format": "object",
+          "examples": [
+            { "spouse": "$10,000", "children": "$5,000" },
+            { "spouse": "$20,000", "children": "$10,000" }
+          ]
+        },
+        "termination_age": {
+          "prompt": "Find the age at which dependent life insurance coverage terminates.",
+          "format": "string",
+          "examples": ["65", "70", "75", "Earlier of retirement or age 75"]
+        }
+      }
+    },
+    "long_term_disability": {
+      "headers": ["LONG TERM DISABILITY", "LTD"],
+      "fields": {
+        "schedule": {
+          "prompt": "Extract the insurance amount for the Long Term Disability Benefit. Return the response in this format: %[percentage] of monthly earnings or $[amount]",
+          "format": "string",
+          "examples": [
+            "66.67% of monthly earnings",
+            "60% of monthly earnings",
+            "70% of monthly earnings"
+          ]
+        },
+        "monthly_maximum": {
+          "prompt": "Extract the maximum monthly benefit amount for the Long Term Disability Benefit. Return it in this format: \"$[amount]\"",
+          "format": "string",
+          "examples": ["$5,000", "$10,000", "$15,000"]
+        },
+        "tax_status": {
+          "prompt": "Extract the tax status of the Long Term Disability Benefit. Return it in this format: \"[tax status]\"",
+          "format": "string",
+          "examples": ["Taxable", "Non-Taxable"]
+        },
+        "elimination_period": {
+          "prompt": "Extract the elimination period before benefits begin for the Long Term Disability Benefit. Return it in this format: \"[number] days\"",
+          "format": "string",
+          "examples": ["119 days", "17 weeks", "180 days"]
+        },
+        "benefit_period": {
+          "prompt": "Extract the maximum period for which benefits will be paid for the Long Term Disability Benefit. Return it in this format: \"to age [age]\"",
+          "format": "string",
+          "examples": [
+            "To age 65",
+            "5 years",
+            "2 years own occupation, to age 65 any occupation"
+          ]
+        },
+        "definition": {
+          "prompt": "Extract the definition of disability in terms of duration and occupation type for the Long Term Disability Benefit. Return it in this format: \"[duration] ([duration in months]) [occupation type]\"",
+          "format": "string",
+          "examples": [
+            "2 years (24 months) own occupation",
+            "2 years (24 months) any occupation"
+          ]
+        },
+        "offsets": {
+          "prompt": "Extract the income/benefit offsets that reduce LTD benefit. Return it in this format: \"[offsets]\"",
+          "format": "string",
+          "examples": ["Primary", "Primary Direct, Family Indirect"]
+        },
+        "cost_of_living_adjustment": {
+          "prompt": "Extract the cost of living adjustment clause for the Long Term Disability Benefit. Return it in this format: \"[percentage]%\" or \"Consumer Price Index or [percentage]%, whichever is less\"",
+          "format": "string",
+          "examples": ["2%", "Consumer Price Index or 2%, whichever is less"]
+        },
+        "pre_existing": {
+          "prompt": "Extract the pre-existing condition/limitation for the long term disability benefit. Look for text about any pre-existing condition exclusions. Format the response as in the examples.",
+          "format": "string",
+          "examples": [
+            "3 months / 12 months",
+            "90 days / 12 months",
+            "13 weeks if treatment free; otherwise 12 months"
+          ]
+        },
+        "survivor_benefit": {
+          "prompt": "Extract the survivor benefit details for the Long Term Disability Benefit. Return it in this format: \"[number] months\" or \"[number] year\"",
+          "format": "string",
+          "examples": ["3 months", "6 months", "1 year"]
+        },
+        "non_evidence_maximum": {
+          "prompt": "Extract the maximum amount that does not require evidence for the Long Term Disability Benefit. If not explicitly stated, return the schedule amount listed under the Long Term Disability Benefit. Return it in this format: \"$[amount]\"",
+          "format": "string",
+          "examples": ["$10,000", "$20,000"]
+        },
+        "termination_age": {
+          "prompt": "Extract the age at which coverage terminates for the Long Term Disability Benefit. Return it in this format: \"[age]\"",
+          "format": "string",
+          "examples": ["65", "70", "75"]
+        }
+      }
+    },
+    "short_term_disability": {
+      "headers": ["SHORT TERM DISABILITY", "STD"],
+      "fields": {
+        "schedule": {
+          "prompt": "Extract the schedule of benefits for the Short Term Disability Benefit. Return it in this format: \"[percentage]% of weekly earnings\"",
+          "format": "string",
+          "examples": [
+            "66.67% of weekly earnings",
+            "70% of weekly salary to a maximum of $1,500"
+          ]
+        },
+        "weekly_maximum": {
+          "prompt": "Extract the maximum weekly benefit amount for the Short Term Disability Benefit. Return it in this format: \"$[amount]\"",
+          "format": "string",
+          "examples": ["$1,500 per week", "$2,000 per week"]
+        },
+        "tax_status": {
+          "prompt": "Extract the tax status of the Short Term Disability Benefit. Return it in this format: \"[tax status]\"",
+          "format": "string",
+          "examples": ["Taxable", "Non-Taxable"]
+        },
+        "elimination_period": {
+          "prompt": "Extract the elimination period before benefits begin for the Short Term Disability Benefit. Return it in this format: \"[number]st day accident & hospital; [number]th day sickness\"",
+          "format": "string",
+          "examples": ["1st day accident & hospital; 8th day sickness"]
+        },
+        "benefit_period": {
+          "prompt": "Extract the maximum period for which benefits will be paid for the Short Term Disability Benefit. Return it in this format: \"[number] weeks\"",
+          "format": "string",
+          "examples": ["17 weeks", "26 weeks", "52 weeks"]
+        },
+        "non_evidence_maximum": {
+          "prompt": "Extract the maximum amount without evidence for the Short Term Disability Benefit. Return it in this format: \"$[amount]\"",
+          "format": "string",
+          "examples": ["$1,000", "$2,000"]
+        },
+        "termination_age": {
+          "prompt": "Extract the age at which coverage terminates for the Short Term Disability Benefit. Return it in this format: \"[age]\"",
+          "format": "string",
+          "examples": ["65", "70", "75"]
+        }
+      }
+    },
+    "critical_illness": {
+      "headers": ["CRITICAL ILLNESS"],
+      "fields": {
+        "schedule": {
+          "prompt": "Extract the insurance amount for the Critical Illness Benefit. Return the response in this format: Flat $[amount] (e.g., Flat $20,000) or $[multiplier] of Annual Salary to $[maximum amount]",
+          "format": "string",
+          "examples": [
+            "$25,000",
+            "$50,000",
+            "2x Annual Salary to maximum $100,000"
+          ]
+        },
+        "impairments": {
+          "prompt": "Extract the covered impairments/conditions for the Critical Illness Benefit. Return it in this format: \"[number] illnesses included: [illness]\"",
+          "format": "string",
+          "examples": [
+            "Cancer, Heart Attack, Stroke",
+            "25 covered conditions including Cancer, Heart Attack, Stroke"
+          ]
+        },
+        "termination_age": {
+          "prompt": "Extract the age at which Critical Illness coverage terminates. Return it in this format: \"[age]\"",
+          "format": "string",
+          "examples": ["65", "70", "75"]
+        }
+      }
+    },
+    "health_care": {
+      "headers": ["HEALTH CARE", "EXTENDED HEALTH CARE", "HEALTH BENEFITS"],
+      "fields": {
+        "prescription_drugs": {
+          "prompt": "Extract the prescription drug coverage details for the Health Care Benefit. Return it in this format: \"[coverage percentage]% - [deductible details]\"",
+          "format": "string",
+          "examples": [
+            "100% - Equal to dispensing fee deductible per prescription",
+            "90% - Nil deductible - Drugs purchased at Costco",
+            "100% - Nil deductible",
+            "80% - Nil deductible"
+          ]
+        },
+        "pay_direct_drug_card": {
+          "prompt": "Extract the pay direct drug card availability for the Health Care Benefit. Format the response as in the examples.",
+          "format": "string",
+          "examples": [
+            "Included - Generic Mandatory",
+            "Included - Brand Name Mandatory",
+            "Not Included"
+          ]
+        },
+        "maximum": {
+          "prompt": "Extract the overall maximum coverage for the Health Care Benefit. Return it in this format: \"$[amount] or Unlimited\"",
+          "format": "string",
+          "examples": ["Unlimited", "$10,000", "$20,000"]
+        },
+        "fertility_drugs": {
+          "prompt": "Extract the fertility drug coverage for the Health Care Benefit. Return it in this format: \"$[amount] lifetime maximum\" or \"[number] cycles to $[amount] lifetime maximum\"",
+          "format": "string",
+          "examples": [
+            "$2,400 lifetime maximum",
+            "6 cycles to $2,500 lifetime maximum"
+          ]
+        },
+        "smoking_cessations": {
+          "prompt": "Extract the smoking cessation coverage for the Health Care Benefit. Return it in this format: \"$[amount] lifetime maximum\" or \"Not included\"",
+          "format": "string",
+          "examples": ["$300 lifetime maximum", "Not included"]
+        },
+        "vaccines": {
+          "prompt": "Extract the vaccine coverage for the Health Care Benefit. Return it in this format: \"[vaccine coverage]\"",
+          "format": "string",
+          "examples": [
+            "Included - reasonable & customary maximum",
+            "Not included"
+          ]
+        },
+        "major_medical": {
+          "prompt": "Extract the major medical coverage for the Health Care Benefit. Return it in this format: \"[percentage]%\"",
+          "format": "string",
+          "examples": ["100%", "80%"]
+        },
+        "annual_deductible": {
+          "prompt": "Extract the annual deductible amount for the Health Care Benefit. Return it in this format: \"$[amount]\"",
+          "format": "string",
+          "examples": ["$1,000", "$2,000", "None"]
+        },
+        "hospitalization": {
+          "prompt": "Extract the hospitalization coverage for the Health Care Benefit. Return it in this format: \"[percentage]% - [deductible details] - [room type]\"",
+          "format": "string",
+          "examples": ["100% - Nil deductible - Semi-Private"]
+        },
+        "orthotic_shoes": {
+          "prompt": "Extract the orthotic shoes coverage for the Health Care Benefit. Return it in this format: \"$[amount] per benefit year maximum\"",
+          "format": "string",
+          "examples": ["$250 per benefit year maximum"]
+        },
+        "orthotic_inserts": {
+          "prompt": "Extract the orthotic inserts coverage for the Health Care Benefit. Return it in this format: \"$[amount] per benefit year maximum\" or \"$[amount] every [number] years\"",
+          "format": "string",
+          "examples": ["$175 per benefit year maximum", "$400 every 3 years"]
+        },
+        "hearing_aids": {
+          "prompt": "Extract the hearing aids coverage for the Health Care Benefit. Return it in this format: \"$[amount] every [number] years\"",
+          "format": "string",
+          "examples": ["$500 every 5 years"]
+        },
+        "vision_care": {
+          "prompt": "Extract the vision care coverage for the Health Care Benefit. Return it in this format: \"$[amount] per benefit year maximum\"",
+          "format": "string",
+          "examples": ["$1,000 per benefit year maximum"]
+        },
+        "eye_exams": {
+          "prompt": "Extract the eye exams coverage for the Health Care Benefit. Return it in this format: \"$[amount] per benefit year maximum\"",
+          "format": "string",
+          "examples": ["$100 per benefit year maximum"]
+        },
+        "paramedical_practitioners": {
+          "prompt": "Extract the paramedical practitioners coverage for the Health Care Benefit. Return it in this format: \"[percentage]% - $[amount] per practitioner per benefit year maximum\"",
+          "format": "string",
+          "examples": ["100% - $500 per practitioner per benefit year maximum"]
+        },
+        "included_specialists": {
+          "prompt": "Extract the list of covered specialists for the Health Care Benefit. Return it in this format: \"[specialist1], [specialist2], [specialist3]\"",
+          "format": "list[string]",
+          "examples": ["Chiropractor, Physiotherapist, Massage Therapist"]
+        },
+        "out_of_country": {
+          "prompt": "Extract the out of country coverage for the Health Care Benefit. Return it in this format: \"[percentage]% - [deductible details] - $[amount] lifetime maximum\"",
+          "format": "string",
+          "examples": ["100% - Nil deductible - $3,000,000 lifetime maximum"]
+        },
+        "maximum_duration": {
+          "prompt": "Extract the maximum duration of coverage for the Health Care Benefit. Return it in this format: \"[number] days\" or \"[number] months\"",
+          "format": "string",
+          "examples": ["30 days", "6 months"]
+        },
+        "trip_cancellation": {
+          "prompt": "Extract the trip cancellation coverage for the Health Care Benefit. Return it in this format: \"$[amount] per trip\"",
+          "format": "string",
+          "examples": ["$5,000 per trip"]
+        },
+        "private_duty_nursing": {
+          "prompt": "Extract the private duty nursing coverage for the Health Care Benefit. Return it in this format: \"$[amount] per benefit year maximum\"",
+          "format": "string",
+          "examples": ["$10,000 per benefit year maximum"]
+        },
+        "survivor_benefit": {
+          "prompt": "Extract the survivor benefit duration for the Health Care Benefit. Return it in this format: \"[number] months\"",
+          "format": "string",
+          "examples": ["3 months"]
+        },
+        "termination_age": {
+          "prompt": "Extract the age at which coverage terminates for the Health Care Benefit. Return it in this format: \"[age]\"",
+          "format": "string",
+          "examples": ["65"]
+        }
+      }
+    },
+    "dental_care": {
+      "headers": ["DENTAL CARE", "DENTAL INSURANCE", "DENTAL BENEFITS"],
+      "fields": {
+        "annual_deductible": {
+          "prompt": "Extract the annual deductible amount for the Dental Care Benefit. Return it in this format: \"$[amount] Single; $[amount] Family\" or \"None\"",
+          "format": "string",
+          "examples": ["$25 Single; $50 Family", "None"]
+        },
+        "basic_and_preventative": {
+          "prompt": "Extract the basic & preventative services coverage for the Dental Care Benefit. Return it in this format: \"[percentage]% up to $[amount] per year\"",
+          "format": "string",
+          "examples": [
+            "100% up to $1,500 per year",
+            "80% up to $1,000 per year"
+          ]
+        },
+        "periodontic_and_endodontic": {
+          "prompt": "Extract the periodontic & endodontic coverage for the Dental Care Benefit. Return it in this format: \"[percentage]% up to $[amount] per year\"",
+          "format": "string",
+          "examples": [
+            "100% up to $1,500 per year",
+            "80% up to $1,000 per year"
+          ]
+        },
+        "annual_maximum": {
+          "prompt": "Extract the annual maximum coverage for the Dental Care Benefit. Return it in this format: \"$[amount] per year\"",
+          "format": "string",
+          "examples": ["$1,500 per year", "$2,000 per year"]
+        },
+        "major_restorative_services": {
+          "prompt": "Extract the major restorative services coverage for the Dental Care Benefit. Return it in this format: \"[percentage]% up to $[amount] per year\"",
+          "format": "string",
+          "examples": ["50% up to $1,500 per year", "60% up to $2,000 per year"]
+        },
+        "orthodontic_services": {
+          "prompt": "Extract the orthodontic services coverage for the Dental Care Benefit. Return it in this format: \"[percentage]% up to $[amount] lifetime maximum\"",
+          "format": "string",
+          "examples": [
+            "50% up to $2,000 lifetime maximum",
+            "60% up to $1,500 lifetime maximum"
+          ]
+        },
+        "lifetime_maximum": {
+          "prompt": "Extract the lifetime maximum coverage for the Dental Care Benefit. Return it in this format: \"$[amount] lifetime maximum\"",
+          "format": "string",
+          "examples": ["$2,000 lifetime maximum", "$1,500 lifetime maximum"]
+        },
+        "recall_frequency": {
+          "prompt": "Extract the recall examination frequency for the Dental Care Benefit. Return it in this format: \"Every [number] months\"",
+          "format": "string",
+          "examples": ["Every 6 months", "Every 9 months"]
+        },
+        "scaling_and_rooting_units": {
+          "prompt": "Extract the scaling and root planing units coverage for the Dental Care Benefit. Return it in this format: \"[number] units per year\"",
+          "format": "string",
+          "examples": ["8 units per year", "10 units per year"]
+        },
+        "white_filings": {
+          "prompt": "Extract the white fillings coverage for the Dental Care Benefit. Return it in this format: \"[percentage]% to [tooth/teeth] or [surface]\"",
+          "format": "string",
+          "examples": [
+            "100% to all teeth",
+            "100% to premolars and anterior teeth only"
+          ]
+        },
+        "fee_guide": {
+          "prompt": "Extract the dental fee guide used for the Dental Care Benefit. Return it in this format: \"[province] [year] fee guide\"",
+          "format": "string",
+          "examples": ["Ontario 2023 fee guide", "Alberta 2022 fee guide"]
+        },
+        "survivor_benefit": {
+          "prompt": "Extract the survivor benefit duration for the Dental Care Benefit. Return it in this format: \"[number] months\"",
+          "format": "string",
+          "examples": ["6 months", "12 months"]
+        },
+        "termination_age": {
+          "prompt": "Extract the age at which coverage terminates for the Dental Care Benefit. Return it in this format: \"[age]\"",
+          "format": "string",
+          "examples": ["70", "75"]
+        }
+      }
+    }
+  },
+  "document_structure": {
+    "start_markers": ["Benefit Summary", "Schedule of Benefits"],
+    "end_markers": [
+      "General Provisions",
+      "General Definitions",
+      "General Information"
+    ],
+    "toc_markers": ["Table of Contents"]
+  }
+}

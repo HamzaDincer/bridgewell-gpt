@@ -210,12 +210,14 @@ class EmbeddingSettings(BaseModel):
         "simple",
         description=(
             "The ingest mode to use for the embedding engine:\n"
-            "If `simple` - ingest files sequentially and one by one. It is the historic behaviour.\n"
-            "If `batch` - if multiple files, parse all the files in parallel, "
-            "and send them in batch to the embedding model.\n"
-            "In `pipeline` - The Embedding engine is kept as busy as possible\n"
-            "If `parallel` - parse the files in parallel using multiple cores, and embedd them in parallel.\n"
-            "`parallel` is the fastest mode for local setup, as it parallelize IO RW in the index.\n"
+            "If `simple` - ingest files sequentially with extraction, RAG, and document phase tracking.\n"
+            "If `batch` - parse files in parallel and send them in batch to the embedding model (no extraction/RAG).\n"
+            "If `pipeline` - keep the embedding engine as busy as possible (no extraction/RAG).\n"
+            "If `parallel` - parse and embed files in parallel WITH full extraction, RAG, and document phase tracking support.\n"
+            "\n"
+            "Note: Both 'simple' and 'parallel' modes support the same features (extraction, RAG, document phases).\n"
+            "Use 'parallel' for better performance with large files while maintaining all capabilities.\n"
+            "\n"
             "For modes that leverage parallelization, you can specify the number of "
             "workers to use with `count_workers`.\n"
         ),

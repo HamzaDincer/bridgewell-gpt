@@ -87,6 +87,13 @@ llamacpp:
 embedding:
   # Should be matching the value above in most cases
   mode: openai
+  # Ingestion modes:
+  # - simple: Sequential ingestion with extraction, RAG, and document phase tracking (default)
+  # - batch: Parallel file parsing with batch embeddings (no extraction/RAG support)
+  # - parallel: Parallel ingestion with full extraction, RAG, and document phase tracking support
+  # - pipeline: Pipelined ingestion for maximum throughput (no extraction/RAG support)
+  # Note: Both 'simple' and 'parallel' modes support the same features. Use 'parallel' for better
+  # performance with large files while maintaining all extraction and RAG capabilities.
   ingest_mode: simple
   embed_dim: 1536 # 768 is for nomic-ai/nomic-embed-text-v1.5
 

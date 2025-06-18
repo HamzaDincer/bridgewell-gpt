@@ -5,6 +5,7 @@ import fcntl
 from typing import List
 from injector import singleton
 from datetime import datetime
+import tempfile
 
 from bridgewell_gpt.paths import local_data_path
 from .document_type_models import DocumentTypeResponse, DocumentTypeCreate, DocumentCreate, DocumentResponse
@@ -19,18 +20,30 @@ class DocumentTypeService:
         logger.debug(f"DocumentTypeService initialized, using data file: {self._data_path}")
 
     def _ensure_data_file(self):
-        """Creates the data file with an empty list if it doesn't exist or is empty (0 bytes)."""
+        """Creates the data file with an empty list if it doesn't exist or is empty (0 bytes), using atomic write and file locking."""
         try:
             if not self._data_path.exists():
                 self._data_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(self._data_path, 'w') as f:
-                    json.dump([], f)
+                tmp_path = str(self._data_path) + ".tmp"
+                with open(tmp_path, 'w') as tmp_file:
+                    fcntl.flock(tmp_file, fcntl.LOCK_EX)
+                    json.dump([], tmp_file)
+                    tmp_file.flush()
+                    os.fsync(tmp_file.fileno())
+                    fcntl.flock(tmp_file, fcntl.LOCK_UN)
+                os.replace(tmp_path, self._data_path)
                 logger.debug(f"Created empty document types data file: {self._data_path}")
             else:
-                # If file exists but is empty (0 bytes), repair it
+                # If file exists but is empty (0 bytes), repair it atomically
                 if self._data_path.stat().st_size == 0:
-                    with open(self._data_path, 'w') as f:
-                        json.dump([], f)
+                    tmp_path = str(self._data_path) + ".tmp"
+                    with open(tmp_path, 'w') as tmp_file:
+                        fcntl.flock(tmp_file, fcntl.LOCK_EX)
+                        json.dump([], tmp_file)
+                        tmp_file.flush()
+                        os.fsync(tmp_file.fileno())
+                        fcntl.flock(tmp_file, fcntl.LOCK_UN)
+                    os.replace(tmp_path, self._data_path)
                     logger.debug(f"Repaired empty document types data file: {self._data_path}")
         except Exception as e:
             logger.error(f"Error ensuring data file {self._data_path}: {e}", exc_info=True)
@@ -54,18 +67,16 @@ class DocumentTypeService:
             return []
 
     def _save_data(self, data: List[dict]):
-        """Saves the document type data to the JSON file atomically and safely."""
-        tmp_path = str(self._data_path) + ".tmp"
+        """Saves the document type data to the JSON file atomically and safely, using a unique temp file per write."""
         try:
-            # Use file locking to prevent race conditions
-            with open(tmp_path, 'w') as tmp_file:
-                # Lock the file exclusively
+            self._data_path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile('w', dir=self._data_path.parent, delete=False) as tmp_file:
                 fcntl.flock(tmp_file, fcntl.LOCK_EX)
                 json.dump(data, tmp_file, indent=2)
                 tmp_file.flush()
                 os.fsync(tmp_file.fileno())
                 fcntl.flock(tmp_file, fcntl.LOCK_UN)
-            # Atomically replace the old file
+                tmp_path = tmp_file.name
             os.replace(tmp_path, self._data_path)
         except Exception as e:
             logger.error(f"Error saving data to {self._data_path}: {e}", exc_info=True)

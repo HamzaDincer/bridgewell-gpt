@@ -139,6 +139,7 @@ function ExtractionPanel({
   } | null>(null);
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
+  const editBoxRef = useRef<HTMLTextAreaElement | null>(null);
 
   const handleDoubleClick = (
     section: string,
@@ -149,7 +150,9 @@ function ExtractionPanel({
     setEditValue(value || "");
   };
 
-  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEditChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
     setEditValue(e.target.value);
   };
 
@@ -187,13 +190,30 @@ function ExtractionPanel({
     }
   };
 
-  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
+  const handleEditKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
       handleEditSave();
     } else if (e.key === "Escape") {
       setEditingField(null);
     }
   };
+
+  const autoResize = () => {
+    const el = editBoxRef.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = el.scrollHeight + "px";
+    }
+  };
+
+  useEffect(() => {
+    if (editingField) {
+      autoResize();
+    }
+  }, [editValue, editingField]);
 
   return (
     <div
@@ -358,8 +378,8 @@ function ExtractionPanel({
                           }}
                         >
                           {isEditing ? (
-                            <input
-                              type="text"
+                            <textarea
+                              ref={editBoxRef}
                               value={editValue}
                               autoFocus
                               onChange={handleEditChange}
@@ -372,6 +392,11 @@ function ExtractionPanel({
                                 padding: "4px 8px",
                                 border: "1px solid #6366f1",
                                 borderRadius: 4,
+                                resize: "none",
+                                lineHeight: 1.5,
+                                minHeight: 32,
+                                maxHeight: 300,
+                                overflow: "auto",
                               }}
                             />
                           ) : (

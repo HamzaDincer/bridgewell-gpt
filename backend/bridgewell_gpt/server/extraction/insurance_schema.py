@@ -2,11 +2,10 @@ from typing import Optional, List, Dict, Any, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 class BoundingBox(BaseModel):
-    x: float
-    y: float
-    width: float
-    height: float
-    page: int
+    l: float
+    t: float
+    r: float
+    b: float
 
 class ExtractionField(BaseModel):
     value: str
@@ -29,7 +28,7 @@ class LifeInsuranceADD(BaseModel):
     reduction: Optional[ExtractionField] = Field(None, 
     description="""Extract the age-based reduction clause for the Life Insurance Benefit. Return it in this format: Reduces by [percentage]% at age [age], further reduces to [amount] or [percentage]% at [age] Example Values: Reduces by 65% at age 65, Reduces by 65% at age 65, further reduces to 10,000$ at age 71""")
     non_evidence_maximum: Optional[ExtractionField] = Field(None, 
-    description="""Extract the insurance amount that does not require medical evidence (Non-Evidence Maximum) for the Life Insurance Benefit. If not explicitly stated, find the insurance amount for the Life Insurance Benefit. Return it as a dollar value in this format: $[amount] (e.g., $25,000, $50,000) Example Values: $25,000, $50,000""")
+    description="""Extract the insurance amount that does not require medical evidence (Non-Evidence Maximum) for the Life Insurance Benefit. If not found, return the insurance amount for the Life Insurance Benefit. Return it as a dollar value in this format: $[amount] (e.g., $25,000, $50,000) Example Values: $25,000, $50,000""")
     termination_age: Optional[ExtractionField] = Field(None, 
     description="""Extract the age at which Life Insurance coverage terminates. Return it in this format: [age] Example Values: 65, 70, 75""")
 

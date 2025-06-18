@@ -136,18 +136,19 @@ class ExtractionService:
                 "Be thorough in your search - check all sections of the document as the information might be in unexpected places. "
                 "\n\n"
                 "Instructions: "
-                "1. Find and return the following information: "
-                "- The exact value from the document (see user prompt for details) "
-                "- The page number where the value was found (0-based) "
-                "- The coordinates of the value on the page (if available) "
-                "- The surrounding text or context where the value was found "
+                "1. For each field, find and return the following information: "
+                "   - The exact value from the document (see user prompt for details) "
+                "   - The page number where the value was found (0-based) "
+                "   - The coordinates of the value on the page, as a list of bounding box dictionaries in this format: [{ 'l': left, 't': top, 'r': right, 'b': bottom}] "
+                "   - The surrounding text or context where the value was found "
                 "2. Return the information in this exact JSON format: "
-                '{ "value": "extracted value", "page": page_number, "coordinates": { "x": x_coordinate, "y": y_coordinate, "width": width, "height": height, "page": page_number }, "source_snippet": "surrounding text" } '
+                '{ "value": "extracted value", "page": page_number, "bbox": [ { "l": left, "t": top, "r": right, "b": bottom } ], "source_snippet": "surrounding text" } '
                 "3. If any piece of information is not available, use null for that field. "
                 "4. If the information is not found at all, return null. "
                 "5. Do not make assumptions or infer values. "
                 "6. Look for the information in any relevant section. "
-                "Return only the JSON object, no other text."
+                "Return only the JSON object, no other text. "
+                "For bbox, always try to extract a list of bounding boxes with keys 'l', 't', 'r', 'b'. If not available, set bbox to null."
             )
             
             prompt = f"""
@@ -302,20 +303,20 @@ class ExtractionService:
                         "Be thorough in your search - check all sections of the document as the information might be in unexpected places. "
                         "\n\n"
                         "Instructions: "
-                        "1. Find and return the following information: "
-                        "- The exact value from the document (see user prompt for details) "
-                        "- The page number where the value was found (0-based) "
-                        "- The coordinates of the value on the page (if available) "
-                        "- The surrounding text or context where the value was found "
+                        "1. For each field, find and return the following information: "
+                        "   - The exact value from the document (see user prompt for details) "
+                        "   - The page number where the value was found (0-based) "
+                        "   - The coordinates of the value on the page, as a list of bounding box dictionaries in this format: [{ 'l': left, 't': top, 'r': right, 'b': bottom}] "
+                        "   - The surrounding text or context where the value was found "
                         "2. Return the information in this exact JSON format: "
-                        '{ "value": "extracted value", "page": page_number, "coordinates": { "x": x_coordinate, "y": y_coordinate, "width": width, "height": height, "page": page_number }, "source_snippet": "surrounding text" } '
+                        '{ "value": "extracted value", "page": page_number, "bbox": [ { "l": left, "t": top, "r": right, "b": bottom } ], "source_snippet": "surrounding text" } '
                         "3. If any piece of information is not available, use null for that field. "
                         "4. If the information is not found at all, return null. "
                         "5. Do not make assumptions or infer values. "
                         "6. Look for the information in any relevant section. "
-                        "Return only the JSON object, no other text."
+                        "Return only the JSON object, no other text. "
+                        "For bbox, always try to extract a list of bounding boxes with keys 'l', 't', 'r', 'b'. If not available, set bbox to null."
                     )
-            
                     try:
                         messages = [
                             ChatMessage(role=MessageRole.SYSTEM, content=system_prompt),
@@ -383,7 +384,7 @@ class ExtractionService:
                                 simple_result = {
                                     "value": response_text,
                                     "page": None,
-                                    "coordinates": None,
+                                    "bbox": None,
                                     "source_snippet": source_text
                                 }
                                 if parent:

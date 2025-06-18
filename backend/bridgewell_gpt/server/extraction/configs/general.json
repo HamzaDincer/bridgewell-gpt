@@ -32,9 +32,9 @@
           "examples": ["$25,000", "$50,000", "$250,000"]
         },
         "termination_age": {
-          "prompt": "Extract the age at which Life Insurance coverage terminates. Return it in this format: [age]",
+          "prompt": "Extract the age at which Life Insurance coverage terminates. Return it in this format: [age] or format it based on the examples",
           "format": "string",
-          "examples": ["65", "70", "75", "Earlier of retirement or age 75"]
+          "examples": ["65", "70", "75", "Retirement"]
         }
       }
     },

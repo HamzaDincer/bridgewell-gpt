@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 export function useDocumentPhase(docId: string | undefined) {
   const [phase, setPhase] = useState<string | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!docId) return;
-    let interval: NodeJS.Timeout | null = null;
+
     const fetchPhase = async () => {
       try {
         const res = await fetch(`/api/v1/documents/${docId}`);
@@ -17,12 +18,24 @@ export function useDocumentPhase(docId: string | undefined) {
         // ignore errors
       }
     };
+
     fetchPhase(); // initial fetch
-    interval = setInterval(fetchPhase, 2000);
+
+    // Start polling
+    intervalRef.current = setInterval(fetchPhase, 2000);
+
     return () => {
-      if (interval) clearInterval(interval);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [docId]);
+
+  // Stop polling when phase is "completed"
+  useEffect(() => {
+    if (phase === "completed" && intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, [phase]);
 
   return phase;
 }

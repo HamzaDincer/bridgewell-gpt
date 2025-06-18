@@ -202,10 +202,6 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                     show_progress=False,
                 )
                 all_nodes.extend(nodes)
-            # Log text and bbox for each node before embedding
-            for idx, node in enumerate(all_nodes):
-                bbox = node.metadata.get("bbox")
-                logger.info(f"Embedding node {idx}: text={node.get_content()[:50]!r}..., bbox={bbox}")
             batch_size = getattr(self.embed_model, 'embed_batch_size', 32)
             n_batches = math.ceil(len(all_nodes) / batch_size)
             logger.info(f"Embedding {len(all_nodes)} nodes in {n_batches} batches (batch_size={batch_size})")
@@ -310,7 +306,7 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                                     return d
                                 all_rag_results = deep_update(all_rag_results, rag_results)
                             # Log RAG results before updating
-                            logger.info(f"RAG batch results: sections={list(all_rag_results.keys())}, fields={[k for sec in all_rag_results.values() if isinstance(sec, dict) for k in sec.keys()]}")
+                            logger.info("RAG batch full results: %s", json.dumps(all_rag_results, indent=2))
                             # Update extraction result with all RAG results
                             if isinstance(extraction_result, dict) and isinstance(all_rag_results, dict):
                                 final_data = deep_update(extraction_result, all_rag_results)
@@ -516,12 +512,12 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
             # Fall back to original parallel processing without extraction
             documents = self._file_to_documents_work_pool.apply(
                 IngestionHelper.transform_file_into_documents, (file_name, stored_file_path)
-        )
-        logger.info(
-            "Transformed file=%s into count=%s documents", file_name, len(documents)
-        )
-        logger.debug("Saving the documents in the index and doc store")
-        return self._save_docs(documents)
+            )
+            logger.info(
+                "Transformed file=%s into count=%s documents", file_name, len(documents)
+            )
+            logger.debug("Saving the documents in the index and doc store")
+            return self._save_docs(documents)
 
     def _background_save_docs(self, file_name: str, stored_file_path: Path, doc_id: str) -> None:
         """Save documents to index in the background and perform RAG extraction."""
@@ -586,10 +582,7 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
                     show_progress=False,
                 )
                 all_nodes.extend(nodes)
-            # Log text and bbox for each node before embedding
-            for idx, node in enumerate(all_nodes):
-                bbox = node.metadata.get("bbox")
-                logger.info(f"Embedding node {idx}: text={node.get_content()[:50]!r}..., bbox={bbox}")
+
             batch_size = getattr(self.embed_model, 'embed_batch_size', 32)
             n_batches = math.ceil(len(all_nodes) / batch_size)
             logger.info(f"Embedding {len(all_nodes)} nodes in {n_batches} batches (batch_size={batch_size})")
@@ -600,7 +593,6 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
                 self._index.docstore.set_document_hash(
                     document.get_doc_id(), document.hash
                 )
-            logger.debug("Persisting the index and nodes")
             self._save_index()
             logger.debug("Persisted the index and nodes")
 
@@ -670,6 +662,7 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
 
                             # Log RAG results before updating
                             logger.info(f"RAG batch results: sections={list(rag_results.keys())}, fields={[k for sec in rag_results.values() if isinstance(sec, dict) for k in sec.keys()]}")
+                            logger.info("RAG batch full results: %s", json.dumps(rag_results, indent=2))
 
                             # Update extraction result with RAG results
                             def deep_update(d: dict, u: dict) -> dict:
@@ -726,11 +719,11 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
         else:
             # Original parallel bulk ingestion without extraction
             documents = list(
-            itertools.chain.from_iterable(
-                self._ingest_work_pool.starmap(self.ingest, files)
+                itertools.chain.from_iterable(
+                    self._ingest_work_pool.starmap(self.ingest, files)
+                )
             )
-        )
-        return documents
+            return documents
 
     def _save_docs(self, documents: list[Document]) -> list[Document]:
         logger.debug("Transforming count=%s documents into nodes", len(documents))

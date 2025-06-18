@@ -3,7 +3,6 @@ import logging
 import pandas as pd
 from bridgewell_gpt.paths import local_data_path
 from openpyxl import load_workbook
-from openpyxl.utils import get_column_letter
 
 logger = logging.getLogger(__name__)
 

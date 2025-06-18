@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import fcntl
-from pathlib import Path
 from typing import List
 from injector import singleton
 from datetime import datetime

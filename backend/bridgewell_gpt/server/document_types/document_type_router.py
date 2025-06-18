@@ -1,5 +1,4 @@
-import os
-from typing import List, Optional, Dict, Any
+from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, Request, HTTPException, Body
 from injector import Injector
 
@@ -7,7 +6,6 @@ from bridgewell_gpt.server.document_types.document_type_models import DocumentTy
 from bridgewell_gpt.server.document_types.document_type_service import DocumentTypeService
 from bridgewell_gpt.server.utils.auth import authenticated
 from bridgewell_gpt.components.extraction.extraction_component import ExtractionComponent
-from bridgewell_gpt.components.ingest.ingest_component import SimpleIngestComponent
 
 # Define router
 document_type_router = APIRouter(prefix="/v1", dependencies=[Depends(authenticated)])

@@ -16,10 +16,10 @@ class Embedding(BaseModel):
 class EmbeddingsService:
     @inject
     def __init__(self, embedding_component: EmbeddingComponent) -> None:
-        self.embedding_model = embedding_component.embedding_model
+        self.embedding_component = embedding_component
 
     def texts_embeddings(self, texts: list[str]) -> list[Embedding]:
-        texts_embeddings = self.embedding_model.get_text_embedding_batch(texts)
+        texts_embeddings = self.embedding_component.get_embeddings(texts)
         return [
             Embedding(
                 index=texts_embeddings.index(embedding),

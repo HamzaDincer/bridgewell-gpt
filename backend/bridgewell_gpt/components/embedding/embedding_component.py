@@ -1,4 +1,5 @@
 import logging
+import math
 
 from injector import inject, singleton
 from llama_index.core.embeddings import BaseEmbedding, MockEmbedding
@@ -12,11 +13,13 @@ logger = logging.getLogger(__name__)
 @singleton
 class EmbeddingComponent:
     embedding_model: BaseEmbedding
+    batch_size: int
 
     @inject
     def __init__(self, settings: Settings) -> None:
         embedding_mode = settings.embedding.mode
         logger.info("Initializing the embedding model in mode=%s", embedding_mode)
+        self.batch_size = getattr(settings.embedding, "batch_size", 32)
         match embedding_mode:
             case "huggingface":
                 try:
@@ -48,12 +51,10 @@ class EmbeddingComponent:
                 )
             case "openai":
                 try:
-                    from llama_index.embeddings.openai import (  # type: ignore
-                        OpenAIEmbedding,
-                    )
+                    from bridgewell_gpt.components.embedding.custom.openai_batch import BatchedOpenAIEmbedding
                 except ImportError as e:
                     raise ImportError(
-                        "OpenAI dependencies not found, install with `poetry install --extras embeddings-openai`"
+                        "Custom OpenAI batching wrapper not found."
                     ) from e
 
                 api_base = (
@@ -62,10 +63,11 @@ class EmbeddingComponent:
                 api_key = settings.openai.embedding_api_key or settings.openai.api_key
                 model = settings.openai.embedding_model
 
-                self.embedding_model = OpenAIEmbedding(
+                self.embedding_model = BatchedOpenAIEmbedding(
                     api_base=api_base,
                     api_key=api_key,
                     model=model,
+                    batch_size=self.batch_size,
                 )
             case "ollama":
                 try:
@@ -165,3 +167,23 @@ class EmbeddingComponent:
                 # Not a random number, is the dimensionality used by
                 # the default embedding model
                 self.embedding_model = MockEmbedding(384)
+
+    def get_embeddings(self, texts: list[str]) -> list[list[float]]:
+        """Batch embedding for OpenAI with profiling."""
+        logger.info("get_embeddings called with %d texts", len(texts))
+        if hasattr(self, "embedding_model") and self.embedding_model.__class__.__name__ == "OpenAIEmbedding":
+            batch_size = self.batch_size
+            all_embeddings = []
+            n_batches = math.ceil(len(texts) / batch_size)
+            for i in range(0, len(texts), batch_size):
+                batch = texts[i:i+batch_size]
+                import time
+                start = time.time()
+                embeddings = self.embedding_model._get_text_embeddings(batch)
+                logger.info(f"OpenAI embedding batch {i//batch_size+1}/{n_batches} (size {len(batch)}) took {time.time() - start:.2f}s")
+                all_embeddings.extend(embeddings)
+            return all_embeddings
+        else:
+            # Fallback to default
+            logger.info("Using default embedding model for texts")
+            return self.embedding_model._get_text_embeddings(texts)

@@ -141,56 +141,65 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
 
     def _background_save_docs(self, file_name: str, stored_file_path: Path, doc_id: str) -> None:
         """Save documents to index in the background and perform RAG extraction."""
-        # Move phase update to 'parsing' here, before starting the thread
+        import threading
         DocumentTypeService().update_document_phase(doc_id, "parsing")
         def update_phase(doc_id: str, phase: str):
             DocumentTypeService().update_document_phase(doc_id, phase)
             logger.info(f"[PHASE UPDATE] doc_id={doc_id} phase={phase}")
 
+        def parse_documents():
+            with self._index_thread_lock:
+                documents = IngestionHelper.transform_file_into_documents(file_name, stored_file_path)
+                logger.info(
+                    "Transformed file=%s into count=%s documents", file_name, len(documents)
+                )
+                # Generate document IDs before extraction/embedding
+                for doc in documents:
+                    doc.doc_id = doc_id
+                    if not doc.metadata:
+                        doc.metadata = {}
+                    doc.metadata["file_name"] = file_name
+                    doc.metadata["doc_id"] = doc_id
+                return documents
+
+        def run_extraction(documents):
+            update_phase(doc_id, "extraction")
+            extraction = self.extraction_component.extract_document(documents, "Benefit", file_name, doc_id)
+            logger.debug(f"Extraction: {extraction}")
+            # Store extraction result in document metadata
+            if extraction and extraction.get("status") == "completed":
+                logger.info(f"Initial extraction successful with ID: {extraction.get('extraction_id')}")
+                for doc in documents:
+                    if not doc.metadata:
+                        doc.metadata = {}
+                    doc.metadata["extraction"] = extraction.get("result", {})
+                    doc.metadata["extraction_id"] = extraction.get("extraction_id")
+                    doc.metadata["document_type"] = extraction.get("document_type")
+                    logger.debug(f"Set extraction_id={doc.metadata['extraction_id']} for doc_id={doc.doc_id}")
+
+        def run_embedding(documents):
+            update_phase(doc_id, "embedding")
+            for document in documents:
+                self._index.insert(document)
+                logger.debug(f"Inserted doc_id={document.doc_id} with extraction_id={document.metadata.get('extraction_id')}")
+            logger.debug("Persisting the index and nodes")
+            self._save_index()
+            logger.debug("Persisted the index and nodes")
+
         def save_task(doc_id_arg=doc_id):
             doc_id = doc_id_arg
             try:
                 update_phase(doc_id, "parsing")
-                logger.debug("Saving the documents in the index and doc store")
-                with self._index_thread_lock:
-                    documents = IngestionHelper.transform_file_into_documents(file_name, stored_file_path)
-                    logger.info(
-                        "Transformed file=%s into count=%s documents", file_name, len(documents)
-                    )
-                    update_phase(doc_id, "extraction")
-                    # Generate document IDs before extraction
-                    for doc in documents:
-                        doc.doc_id = doc_id
-                        if not doc.metadata:
-                            doc.metadata = {}
-                        doc.metadata["file_name"] = file_name
-                        doc.metadata["doc_id"] = doc_id
-
-                    # Extract the document using the injected component
-                    extraction = self.extraction_component.extract_document(documents, "Benefit", file_name, doc_id)
-                    logger.debug(f"Extraction: {extraction}")
-
-                    update_phase(doc_id, "embedding")
-                    # Store extraction result in document metadata
-                    if extraction and extraction.get("status") == "completed":
-                        logger.info(f"Initial extraction successful with ID: {extraction.get('extraction_id')}")
-                        for doc in documents:
-                            if not doc.metadata:
-                                doc.metadata = {}
-                            doc.metadata["extraction"] = extraction.get("result", {})
-                            doc.metadata["extraction_id"] = extraction.get("extraction_id")
-                            doc.metadata["document_type"] = extraction.get("document_type")
-                            logger.debug(f"Set extraction_id={doc.metadata['extraction_id']} for doc_id={doc.doc_id}")
-
-                    for document in documents:
-                        self._index.insert(document)
-                        logger.debug(f"Inserted doc_id={document.doc_id} with extraction_id={document.metadata.get('extraction_id')}")
-                    logger.debug("Persisting the index and nodes")
-                    self._save_index()
-                    logger.debug("Persisted the index and nodes")
-
-                # After embeddings are complete, perform RAG extraction
-                logger.info("Starting RAG extraction after embeddings")
+                documents = parse_documents()
+                # Start extraction and embedding in parallel
+                extraction_thread = threading.Thread(target=run_extraction, args=(documents,))
+                embedding_thread = threading.Thread(target=run_embedding, args=(documents,))
+                extraction_thread.start()
+                embedding_thread.start()
+                extraction_thread.join()
+                embedding_thread.join()
+                # After both are done, proceed with RAG extraction as before
+                logger.info("Starting RAG extraction after embeddings and extraction")
                 update_phase(doc_id, "rag")
                 with self._rag_thread_lock:
                     try:
@@ -318,7 +327,6 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                 if doc_id is not None:
                     update_phase(doc_id, "completed")
 
-        import threading
         thread = threading.Thread(target=save_task, args=(doc_id,))
         thread.start()
 
@@ -494,77 +502,66 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
 
     def _background_save_docs(self, file_name: str, stored_file_path: Path, doc_id: str) -> None:
         """Save documents to index in the background and perform RAG extraction."""
-        # Update phase to 'parsing' before starting the thread
+        import threading
         DocumentTypeService().update_document_phase(doc_id, "parsing")
-        
         def update_phase(doc_id: str, phase: str):
             DocumentTypeService().update_document_phase(doc_id, phase)
             logger.info(f"[PHASE UPDATE] doc_id={doc_id} phase={phase}")
 
-        def save_task(doc_id_arg=doc_id):
-            doc_id = doc_id_arg
-            try:
-                update_phase(doc_id, "parsing")
-                logger.debug("Saving the documents in the index and doc store")
-                
-                # Use multiprocessing pool for document transformation
-                documents = self._file_to_documents_work_pool.apply(
-                    IngestionHelper.transform_file_into_documents, (file_name, stored_file_path)
-                )
+        def parse_documents():
+            with self._index_thread_lock:
+                documents = IngestionHelper.transform_file_into_documents(file_name, stored_file_path)
                 logger.info(
                     "Transformed file=%s into count=%s documents", file_name, len(documents)
                 )
-                
-                update_phase(doc_id, "extraction")
-                
-                # Generate document IDs before extraction
+                # Generate document IDs before extraction/embedding
                 for doc in documents:
                     doc.doc_id = doc_id
                     if not doc.metadata:
                         doc.metadata = {}
                     doc.metadata["file_name"] = file_name
                     doc.metadata["doc_id"] = doc_id
+                return documents
 
-                # Extract the document using the injected component
-                extraction = self.extraction_component.extract_document(documents, "Benefit", file_name, doc_id)
-                logger.info(f"Extraction: {extraction}")
+        def run_extraction(documents):
+            update_phase(doc_id, "extraction")
+            extraction = self.extraction_component.extract_document(documents, "Benefit", file_name, doc_id)
+            logger.debug(f"Extraction: {extraction}")
+            # Store extraction result in document metadata
+            if extraction and extraction.get("status") == "completed":
+                logger.info(f"Initial extraction successful with ID: {extraction.get('extraction_id')}")
+                for doc in documents:
+                    if not doc.metadata:
+                        doc.metadata = {}
+                    doc.metadata["extraction"] = extraction.get("result", {})
+                    doc.metadata["extraction_id"] = extraction.get("extraction_id")
+                    doc.metadata["document_type"] = extraction.get("document_type")
+                    logger.debug(f"Set extraction_id={doc.metadata['extraction_id']} for doc_id={doc.doc_id}")
 
-                update_phase(doc_id, "embedding")
-                
-                # Store extraction result in document metadata
-                if extraction and extraction.get("status") == "completed":
-                    logger.info(f"Initial extraction successful with ID: {extraction.get('extraction_id')}")
-                    for doc in documents:
-                        if not doc.metadata:
-                            doc.metadata = {}
-                        doc.metadata["extraction"] = extraction.get("result", {})
-                        doc.metadata["extraction_id"] = extraction.get("extraction_id")
-                        doc.metadata["document_type"] = extraction.get("document_type")
-                        logger.debug(f"Set extraction_id={doc.metadata['extraction_id']} for doc_id={doc.doc_id}")
+        def run_embedding(documents):
+            update_phase(doc_id, "embedding")
+            for document in documents:
+                self._index.insert(document)
+                logger.debug(f"Inserted doc_id={document.doc_id} with extraction_id={document.metadata.get('extraction_id')}")
+            logger.debug("Persisting the index and nodes")
+            self._save_index()
+            logger.debug("Persisted the index and nodes")
 
-                # Transform documents to nodes in parallel
-                nodes = run_transformations(
-                    documents,
-                    self.transformations,
-                    show_progress=self.show_progress,
-                )
-                
-                # Lock for index insertion
-                with self._index_thread_lock:
-                    logger.info("Inserting count=%s nodes in the index", len(nodes))
-                    self._index.insert_nodes(nodes, show_progress=True)
-                    for document in documents:
-                        self._index.docstore.set_document_hash(
-                            document.get_doc_id(), document.hash
-                        )
-                    logger.debug("Persisting the index and nodes")
-                    self._save_index()
-                    logger.debug("Persisted the index and nodes")
-
-                # After embeddings are complete, perform RAG extraction
-                logger.info("Starting RAG extraction after embeddings")
+        def save_task(doc_id_arg=doc_id):
+            doc_id = doc_id_arg
+            try:
+                update_phase(doc_id, "parsing")
+                documents = parse_documents()
+                # Start extraction and embedding in parallel
+                extraction_thread = threading.Thread(target=run_extraction, args=(documents,))
+                embedding_thread = threading.Thread(target=run_embedding, args=(documents,))
+                extraction_thread.start()
+                embedding_thread.start()
+                extraction_thread.join()
+                embedding_thread.join()
+                # After both are done, proceed with RAG extraction as before
+                logger.info("Starting RAG extraction after embeddings and extraction")
                 update_phase(doc_id, "rag")
-                
                 with self._rag_thread_lock:
                     try:
                         # Get the file name from the first document's metadata
@@ -685,7 +682,6 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
                 if doc_id is not None:
                     update_phase(doc_id, "completed")
 
-        # Start background thread
         thread = threading.Thread(target=save_task, args=(doc_id,))
         thread.start()
 

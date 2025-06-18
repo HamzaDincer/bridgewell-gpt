@@ -1,5 +1,7 @@
 import json
 import logging
+import os
+import fcntl
 from pathlib import Path
 from typing import List
 from injector import singleton
@@ -53,10 +55,19 @@ class DocumentTypeService:
             return []
 
     def _save_data(self, data: List[dict]):
-        """Saves the document type data to the JSON file."""
+        """Saves the document type data to the JSON file atomically and safely."""
+        tmp_path = str(self._data_path) + ".tmp"
         try:
-            with open(self._data_path, 'w') as f:
-                json.dump(data, f, indent=2)
+            # Use file locking to prevent race conditions
+            with open(tmp_path, 'w') as tmp_file:
+                # Lock the file exclusively
+                fcntl.flock(tmp_file, fcntl.LOCK_EX)
+                json.dump(data, tmp_file, indent=2)
+                tmp_file.flush()
+                os.fsync(tmp_file.fileno())
+                fcntl.flock(tmp_file, fcntl.LOCK_UN)
+            # Atomically replace the old file
+            os.replace(tmp_path, self._data_path)
         except Exception as e:
             logger.error(f"Error saving data to {self._data_path}: {e}", exc_info=True)
             raise

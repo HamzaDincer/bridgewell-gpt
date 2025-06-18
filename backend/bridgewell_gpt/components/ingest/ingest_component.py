@@ -10,6 +10,7 @@ from queue import Queue
 from typing import Any
 import uuid
 import json
+import math
 
 from llama_index.core.data_structs import IndexDict
 from llama_index.core.embeddings.utils import EmbedType
@@ -179,9 +180,22 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
 
         def run_embedding(documents):
             update_phase(doc_id, "embedding")
+            # Explicit batch embedding
+            nodes = run_transformations(
+                documents,  # type: ignore[arg-type]
+                self.transformations,
+                show_progress=self.show_progress,
+            )
+            batch_size = getattr(self.embed_model, 'embed_batch_size', 32)
+            n_batches = math.ceil(len(nodes) / batch_size)
+            logger.info(f"Embedding {len(nodes)} nodes in {n_batches} batches (batch_size={batch_size})")
+            for i, node_batch in enumerate(batch_nodes(nodes, batch_size)):
+                logger.info(f"Inserting embedding batch {i+1}/{n_batches} (size {len(node_batch)})")
+                self._index.insert_nodes(node_batch, show_progress=True)
             for document in documents:
-                self._index.insert(document)
-                logger.debug(f"Inserted doc_id={document.doc_id} with extraction_id={document.metadata.get('extraction_id')}")
+                self._index.docstore.set_document_hash(
+                    document.get_doc_id(), document.hash
+                )
             logger.debug("Persisting the index and nodes")
             self._save_index()
             logger.debug("Persisted the index and nodes")
@@ -341,11 +355,23 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
 
     def _save_docs(self, documents: list[Document]) -> list[Document]:
         logger.debug("Transforming count=%s documents into nodes", len(documents))
+        nodes = run_transformations(
+            documents,  # type: ignore[arg-type]
+            self.transformations,
+            show_progress=self.show_progress,
+        )
+        batch_size = getattr(self.embed_model, 'embed_batch_size', 32)
+        n_batches = math.ceil(len(nodes) / batch_size)
         with self._index_thread_lock:
+            logger.info("Inserting count=%s nodes in the index (batch_size=%s, n_batches=%s)", len(nodes), batch_size, n_batches)
+            for i, node_batch in enumerate(batch_nodes(nodes, batch_size)):
+                logger.info(f"Inserting embedding batch {i+1}/{n_batches} (size {len(node_batch)})")
+                self._index.insert_nodes(node_batch, show_progress=False)
             for document in documents:
-                self._index.insert(document)
+                self._index.docstore.set_document_hash(
+                    document.get_doc_id(), document.hash
+                )
             logger.debug("Persisting the index and nodes")
-            # persist the index and nodes
             self._save_index()
             logger.debug("Persisted the index and nodes")
         return documents
@@ -410,16 +436,18 @@ class BatchIngestComponent(BaseIngestComponentWithIndex):
             self.transformations,
             show_progress=self.show_progress,
         )
-        # Locking the index to avoid concurrent writes
+        batch_size = getattr(self.embed_model, 'embed_batch_size', 32)
+        n_batches = math.ceil(len(nodes) / batch_size)
         with self._index_thread_lock:
-            logger.info("Inserting count=%s nodes in the index", len(nodes))
-            self._index.insert_nodes(nodes, show_progress=True)
+            logger.info("Inserting count=%s nodes in the index (batch_size=%s, n_batches=%s)", len(nodes), batch_size, n_batches)
+            for i, node_batch in enumerate(batch_nodes(nodes, batch_size)):
+                logger.info(f"Inserting embedding batch {i+1}/{n_batches} (size {len(node_batch)})")
+                self._index.insert_nodes(node_batch, show_progress=False)
             for document in documents:
                 self._index.docstore.set_document_hash(
                     document.get_doc_id(), document.hash
                 )
             logger.debug("Persisting the index and nodes")
-            # persist the index and nodes
             self._save_index()
             logger.debug("Persisted the index and nodes")
         return documents
@@ -540,9 +568,22 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
 
         def run_embedding(documents):
             update_phase(doc_id, "embedding")
+            # Explicit batch embedding
+            nodes = run_transformations(
+                documents,  # type: ignore[arg-type]
+                self.transformations,
+                show_progress=self.show_progress,
+            )
+            batch_size = getattr(self.embed_model, 'embed_batch_size', 32)
+            n_batches = math.ceil(len(nodes) / batch_size)
+            logger.info(f"Embedding {len(nodes)} nodes in {n_batches} batches (batch_size={batch_size})")
+            for i, node_batch in enumerate(batch_nodes(nodes, batch_size)):
+                logger.info(f"Inserting embedding batch {i+1}/{n_batches} (size {len(node_batch)})")
+                self._index.insert_nodes(node_batch, show_progress=False)
             for document in documents:
-                self._index.insert(document)
-                logger.debug(f"Inserted doc_id={document.doc_id} with extraction_id={document.metadata.get('extraction_id')}")
+                self._index.docstore.set_document_hash(
+                    document.get_doc_id(), document.hash
+                )
             logger.debug("Persisting the index and nodes")
             self._save_index()
             logger.debug("Persisted the index and nodes")
@@ -602,9 +643,9 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
                         if missing_fields:
                             logger.info(f"Found {len(missing_fields)} missing fields, using RAG to extract them")
                             # Extract missing fields using RAG with company config
-                            company_config = extraction_service._load_company_config("rbc")  # Default to RBC config for now
+                            company_config = extraction_service._load_company_config("general")  # Default to general config for now
                             rag_results = extraction_service._extract_with_rag(
-                                file_name=doc_file_name,
+                                doc_id=doc_id,
                                 missing_fields=missing_fields,
                                 company_config=company_config
                             )
@@ -709,16 +750,18 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
             self.transformations,
             show_progress=self.show_progress,
         )
-        # Locking the index to avoid concurrent writes
+        batch_size = getattr(self.embed_model, 'embed_batch_size', 32)
+        n_batches = math.ceil(len(nodes) / batch_size)
         with self._index_thread_lock:
-            logger.info("Inserting count=%s nodes in the index", len(nodes))
-            self._index.insert_nodes(nodes, show_progress=True)
+            logger.info("Inserting count=%s nodes in the index (batch_size=%s, n_batches=%s)", len(nodes), batch_size, n_batches)
+            for i, node_batch in enumerate(batch_nodes(nodes, batch_size)):
+                logger.info(f"Inserting embedding batch {i+1}/{n_batches} (size {len(node_batch)})")
+                self._index.insert_nodes(node_batch, show_progress=False)
             for document in documents:
                 self._index.docstore.set_document_hash(
                     document.get_doc_id(), document.hash
                 )
             logger.debug("Persisting the index and nodes")
-            # persist the index and nodes
             self._save_index()
             logger.debug("Persisted the index and nodes")
         return documents
@@ -944,3 +987,9 @@ def get_ingestion_component(
             ingest_service=ingest_service,
             chat_service=chat_service,
         )
+
+# Helper to batch nodes
+
+def batch_nodes(nodes, batch_size):
+    for i in range(0, len(nodes), batch_size):
+        yield nodes[i:i+batch_size]

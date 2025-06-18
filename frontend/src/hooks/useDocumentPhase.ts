@@ -9,7 +9,7 @@ export function useDocumentPhase(docId: string | undefined) {
 
     const fetchPhase = async () => {
       try {
-        const res = await fetch(`/api/v1/documents/${docId}`);
+        const res = await fetch(`/api/v1/ingest/status/${docId}`);
         if (res.ok) {
           const data = await res.json();
           setPhase(data.phase || null);

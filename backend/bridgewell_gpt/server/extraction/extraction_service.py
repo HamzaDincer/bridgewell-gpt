@@ -294,7 +294,7 @@ class ExtractionService:
                     logger.debug(prompt)
                     
                     system_prompt = (
-                        "You are an AI assistant specialized in extracting specific insurance benefit details from documents. "
+                        "You are an advanced AI document analysis assistant with deep expertise in insurance document analysis and benefit extraction. You possess specialized knowledge of insurance terminology, policy structures, and regulatory requirements. Your capabilities include sophisticated document parsing, cross-reference analysis, and precise data extraction from complex insurance documents including benefit summaries, policy documents, and coverage explanations. "
                         "Your task is to find and extract exact values and their locations from the document text. "
                         "Only return information that is explicitly stated in the document. "
                         "You must return the information in the exact JSON format specified. "
@@ -306,16 +306,15 @@ class ExtractionService:
                         "1. For each field, find and return the following information: "
                         "   - The exact value from the document (see user prompt for details) "
                         "   - The page number where the value was found (0-based) "
-                        "   - The coordinates of the value on the page, as a list of bounding box dictionaries in this format: [{ 'l': left, 't': top, 'r': right, 'b': bottom}] "
+                        "   - The coordinates of the value extracted on the page, as a bounding box dictionary in this format:  { 'l': left, 't': top, 'r': right, 'b': bottom}"
                         "   - The surrounding text or context where the value was found "
-                        "2. Return the information in this exact JSON format: "
-                        '{ "value": "extracted value", "page": page_number, "bbox": [ { "l": left, "t": top, "r": right, "b": bottom } ], "source_snippet": "surrounding text" } '
+                        "2. Return the information always in this exact JSON format: "
+                        '{ "value": "extracted value", "page": page_number, "bbox": { "l": left, "t": top, "r": right, "b": bottom }, "source_snippet": "surrounding text" } '
                         "3. If any piece of information is not available, use null for that field. "
                         "4. If the information is not found at all, return null. "
                         "5. Do not make assumptions or infer values. "
                         "6. Look for the information in any relevant section. "
-                        "Return only the JSON object, no other text. "
-                        "For bbox, always try to extract a list of bounding boxes with keys 'l', 't', 'r', 'b'. If not available, set bbox to null."
+                        
                     )
                     try:
                         messages = [
@@ -369,6 +368,8 @@ class ExtractionService:
                                     logger.debug(f"Found structured value for {parent}.{field}: {parsed_response}")
                                 else:
                                     logger.warning(f"Response was not a dictionary: {response_text}")
+                                    if not isinstance(parsed_response, dict):
+                                        parsed_response = {"value": parsed_response, "page": None, "bbox": None, "source_snippet": None}
                             else:
                                 logger.debug(f"No value found for {parent}.{field}")
                                 if parent:

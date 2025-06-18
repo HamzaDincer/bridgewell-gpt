@@ -27,7 +27,7 @@
           ]
         },
         "non_evidence_maximum": {
-          "prompt": "Extract the insurance amount that does not require medical evidence for the Life Insurance Benefit. If not explicitly stated, find the insurance amount for the Life Insurance Benefit. Return it as a dollar value in this format: $[amount]",
+          "prompt": "Extract the insurance amount that does not require medical evidence for the Life Insurance Benefit. If not found, extract the insurance amount for the Life Insurance Benefit. Return it as a dollar value in this format: $[amount]",
           "format": "string",
           "examples": ["$25,000", "$50,000", "$250,000"]
         },

@@ -162,6 +162,7 @@ class IngestionHelper:
                 parsed_doc = parsed_docs[0]
                 documents = []
                 for chunk in parsed_doc.chunks:
+                    bbox = [g.box.dict() for g in chunk.grounding] if chunk.grounding else None
                     doc = Document(
                         text=chunk.text,
                         metadata={
@@ -169,7 +170,7 @@ class IngestionHelper:
                             "chunk_type": chunk.chunk_type.value if hasattr(chunk, 'chunk_type') else None,
                             "chunk_id": chunk.chunk_id if hasattr(chunk, 'chunk_id') else None,
                             "page": chunk.grounding[0].page if chunk.grounding else None,
-                            "bbox": [g.box.dict() for g in chunk.grounding] if chunk.grounding else None
+                            "bbox": bbox
                         }
                     )
                     documents.append(doc)

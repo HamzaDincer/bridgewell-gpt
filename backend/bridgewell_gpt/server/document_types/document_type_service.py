@@ -182,18 +182,4 @@ class DocumentTypeService:
                     return
         logger.warning(f"Document with id={doc_id} not found for phase update.")
 
-    # Potential future methods:
-    # def update_counts(self, type_id: int, uploaded: int, pending: int, approved: int):
-    #     data = self._load_data()
-    #     for item in data:
-    #         if item['id'] == type_id:
-    #             item['uploaded'] = uploaded
-    #             item['reviewPending'] = pending
-    #             item['approved'] = approved
-    #             self._save_data(data)
-    #             return DocumentTypeResponse(**item)
-    #     raise ValueError("Document type not found") # Or HTTPException
-
-    # def set_setup_required(self, type_id: int, required: bool):
-    #     # ... load, find, update, save ...
-    #     pass 
+ 

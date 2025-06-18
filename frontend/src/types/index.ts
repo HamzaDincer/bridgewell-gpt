@@ -74,13 +74,14 @@ export interface AnnotationsByPage {
 export interface ExtractionField {
   value: string;
   page: number | null;
-  coordinates: {
+  coordinates?: {
     x: number | null;
     y: number | null;
     width: number | null;
     height: number | null;
   } | null;
   source_snippet: string;
+  bbox?: { l: number; t: number; r: number; b: number }[]; // Optional bbox for backend compatibility
 }
 
 export interface ExtractionResult {

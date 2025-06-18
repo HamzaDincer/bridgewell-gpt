@@ -189,9 +189,7 @@ export function DocumentListView({
           <TableBody>
             {documents.map((doc) => {
               const phase = doc.phase;
-              const isBlocked = !["embedding", "rag", "completed"].includes(
-                phase || "",
-              );
+              const isBlocked = !["rag", "completed"].includes(phase || "");
               return (
                 <TableRow
                   key={doc.id}

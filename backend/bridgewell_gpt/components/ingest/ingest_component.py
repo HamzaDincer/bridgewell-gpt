@@ -143,10 +143,23 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
     def _background_save_docs(self, file_name: str, stored_file_path: Path, doc_id: str) -> None:
         """Save documents to index in the background and perform RAG extraction."""
         import threading
-        DocumentTypeService().update_document_phase(doc_id, "parsing")
+        import time
+        # Remove the early phase update here
+        # DocumentTypeService().update_document_phase(doc_id, "parsing")
         def update_phase(doc_id: str, phase: str):
             DocumentTypeService().update_document_phase(doc_id, phase)
             logger.info(f"[PHASE UPDATE] doc_id={doc_id} phase={phase}")
+
+        def wait_for_document_entry(doc_id, timeout=10):
+            start = time.time()
+            while time.time() - start < timeout:
+                data = DocumentTypeService()._load_data()
+                for type_data in data:
+                    for doc in type_data.get('documents', []):
+                        if doc['id'] == doc_id:
+                            return True
+                time.sleep(0.2)
+            return False
 
         def parse_documents():
             with self._index_thread_lock:
@@ -161,7 +174,7 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                         doc.metadata = {}
                     doc.metadata["file_name"] = file_name
                     doc.metadata["doc_id"] = doc_id
-                return documents
+            return documents
 
         def run_extraction(documents):
             update_phase(doc_id, "extraction")
@@ -180,16 +193,23 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
 
         def run_embedding(documents):
             update_phase(doc_id, "embedding")
-            # Explicit batch embedding
-            nodes = run_transformations(
-                documents,  # type: ignore[arg-type]
-                self.transformations,
-                show_progress=self.show_progress,
-            )
+            # Transform each document individually to avoid shared metadata
+            all_nodes = []
+            for doc in documents:
+                nodes = run_transformations(
+                    [doc],  # single document at a time
+                    self.transformations,
+                    show_progress=False,
+                )
+                all_nodes.extend(nodes)
+            # Log text and bbox for each node before embedding
+            for idx, node in enumerate(all_nodes):
+                bbox = node.metadata.get("bbox")
+                logger.info(f"Embedding node {idx}: text={node.get_content()[:50]!r}..., bbox={bbox}")
             batch_size = getattr(self.embed_model, 'embed_batch_size', 32)
-            n_batches = math.ceil(len(nodes) / batch_size)
-            logger.info(f"Embedding {len(nodes)} nodes in {n_batches} batches (batch_size={batch_size})")
-            for i, node_batch in enumerate(batch_nodes(nodes, batch_size)):
+            n_batches = math.ceil(len(all_nodes) / batch_size)
+            logger.info(f"Embedding {len(all_nodes)} nodes in {n_batches} batches (batch_size={batch_size})")
+            for i, node_batch in enumerate(batch_nodes(all_nodes, batch_size)):
                 logger.info(f"Inserting embedding batch {i+1}/{n_batches} (size {len(node_batch)})")
                 self._index.insert_nodes(node_batch, show_progress=True)
             for document in documents:
@@ -203,6 +223,8 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
         def save_task(doc_id_arg=doc_id):
             doc_id = doc_id_arg
             try:
+                # Wait for document entry to exist before updating phase
+                wait_for_document_entry(doc_id)
                 update_phase(doc_id, "parsing")
                 documents = parse_documents()
                 # Start extraction and embedding in parallel
@@ -258,73 +280,46 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                         extraction_service = ExtractionService(self._ingest_service, self._chat_service)
                         missing_fields = extraction_service._has_missing_fields(extraction_result, InsuranceSummary)
 
+                        def batch_fields(fields, batch_size):
+                            for i in range(0, len(fields), batch_size):
+                                yield fields[i:i+batch_size]
+
                         if missing_fields:
-                            logger.info(f"Found {len(missing_fields)} missing fields, using RAG to extract them")
-                            # Extract missing fields using RAG with company config
+                            logger.info(f"Found {len(missing_fields)} missing fields, using RAG to extract them in batches of 10")
                             company_config = extraction_service._load_company_config("general")  # Default to general config for now
-                            rag_results = extraction_service._extract_with_rag(
-                                doc_id=doc_id,
-                                missing_fields=missing_fields,
-                                company_config=company_config
-                            )
-
-                            # Log RAG results before updating
-                            logger.info("\n=== RAG Extraction Results Before Merging ===")
-                            try:
-                                if rag_results:
-                                    for section_name, section_data in rag_results.items():
-                                        logger.info(f"\nSection: {section_name}")
-                                        if not section_data:
-                                            logger.info("  No data found")
-                                            continue
-                                            
-                                        if isinstance(section_data, dict):
-                                            for field_name, field_data in section_data.items():
-                                                logger.info(f"\n  Field: {field_name}")
-                                                if field_data is None:
-                                                    logger.info("    Value: None")
-                                                else:
-                                                    try:
-                                                        # Pretty print the field data
-                                                        formatted_data = json.dumps(field_data, indent=4)
-                                                        # Add indentation to each line for better readability
-                                                        indented_data = "\n".join(f"    {line}" for line in formatted_data.split("\n"))
-                                                        logger.info(f"    Data:\n{indented_data}")
-                                                    except Exception as e:
-                                                        logger.info(f"    Raw Value: {field_data}")
+                            all_rag_results = {}
+                            batch_size = 10
+                            for batch in batch_fields(missing_fields, batch_size):
+                                rag_results = extraction_service._extract_with_rag(
+                                    doc_id=doc_id,
+                                    missing_fields=batch,
+                                    company_config=company_config
+                                )
+                                # Merge this batch's results into all_rag_results
+                                def deep_update(d: dict, u: dict) -> dict:
+                                    if not isinstance(u, dict):
+                                        return d
+                                    for k, v in u.items():
+                                        if isinstance(v, dict):
+                                            if not isinstance(d.get(k), dict) or not d.get(k):
+                                                d[k] = v
+                                            else:
+                                                d[k] = deep_update(d.get(k, {}), v)
                                         else:
-                                            logger.info(f"  Raw Data: {section_data}")
-                                else:
-                                    logger.info("No RAG results found")
-                            except Exception as e:
-                                logger.error(f"Error logging RAG results: {str(e)}")
-                                logger.error(f"Raw RAG results: {rag_results}")
-
-                            # Update extraction result with RAG results
-                            def deep_update(d: dict, u: dict) -> dict:
-                                if not isinstance(u, dict):
-                                    return d
-                                for k, v in u.items():
-                                    if isinstance(v, dict):
-                                        # If d[k] is not a dict or is empty, replace it entirely
-                                        if not isinstance(d.get(k), dict) or not d.get(k):
                                             d[k] = v
-                                        else:
-                                            d[k] = deep_update(d.get(k, {}), v)
-                                    else:
-                                        d[k] = v
-                                return d
-
-                            logger.info(f"RAG results type: {type(rag_results)}; value: {repr(rag_results)}")
-                            # Only update if both extraction_result and rag_results are dicts
-                            if isinstance(extraction_result, dict) and isinstance(rag_results, dict):
-                                final_data = deep_update(extraction_result, rag_results)
+                                    return d
+                                all_rag_results = deep_update(all_rag_results, rag_results)
+                            # Log RAG results before updating
+                            logger.info(f"RAG batch results: sections={list(all_rag_results.keys())}, fields={[k for sec in all_rag_results.values() if isinstance(sec, dict) for k in sec.keys()]}")
+                            # Update extraction result with all RAG results
+                            if isinstance(extraction_result, dict) and isinstance(all_rag_results, dict):
+                                final_data = deep_update(extraction_result, all_rag_results)
                                 extraction_data["result"] = final_data
                                 with open(result_file, 'w') as f:
                                     json.dump(extraction_data, f, indent=2)
-                                logger.info("Successfully updated extraction results with RAG data")
+                                logger.info("Successfully updated extraction results with batched RAG data")
                             else:
-                                logger.error(f"Cannot update extraction results: extraction_result is {type(extraction_result)}, rag_results is {type(rag_results)}")
+                                logger.error(f"Cannot update extraction results: extraction_result is {type(extraction_result)}, all_rag_results is {type(all_rag_results)}")
                         else:
                             logger.info("No missing fields found, skipping RAG extraction")
 
@@ -521,20 +516,34 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
             # Fall back to original parallel processing without extraction
             documents = self._file_to_documents_work_pool.apply(
                 IngestionHelper.transform_file_into_documents, (file_name, stored_file_path)
-            )
-            logger.info(
-                "Transformed file=%s into count=%s documents", file_name, len(documents)
-            )
-            logger.debug("Saving the documents in the index and doc store")
-            return self._save_docs(documents)
+        )
+        logger.info(
+            "Transformed file=%s into count=%s documents", file_name, len(documents)
+        )
+        logger.debug("Saving the documents in the index and doc store")
+        return self._save_docs(documents)
 
     def _background_save_docs(self, file_name: str, stored_file_path: Path, doc_id: str) -> None:
         """Save documents to index in the background and perform RAG extraction."""
         import threading
-        DocumentTypeService().update_document_phase(doc_id, "parsing")
+        import time
+        # Remove the early phase update here
+        # DocumentTypeService().update_document_phase(doc_id, "parsing")
         def update_phase(doc_id: str, phase: str):
             DocumentTypeService().update_document_phase(doc_id, phase)
             logger.info(f"[PHASE UPDATE] doc_id={doc_id} phase={phase}")
+
+        def wait_for_document_entry(doc_id, timeout=10):
+            from bridgewell_gpt.server.document_types.document_type_service import DocumentTypeService
+            start = time.time()
+            while time.time() - start < timeout:
+                data = DocumentTypeService()._load_data()
+                for type_data in data:
+                    for doc in type_data.get('documents', []):
+                        if doc['id'] == doc_id:
+                            return True
+                time.sleep(0.2)
+            return False
 
         def parse_documents():
             with self._index_thread_lock:
@@ -549,7 +558,7 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
                         doc.metadata = {}
                     doc.metadata["file_name"] = file_name
                     doc.metadata["doc_id"] = doc_id
-                return documents
+            return documents
 
         def run_extraction(documents):
             update_phase(doc_id, "extraction")
@@ -568,18 +577,25 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
 
         def run_embedding(documents):
             update_phase(doc_id, "embedding")
-            # Explicit batch embedding
-            nodes = run_transformations(
-                documents,  # type: ignore[arg-type]
-                self.transformations,
-                show_progress=self.show_progress,
-            )
+            # Transform each document individually to avoid shared metadata
+            all_nodes = []
+            for doc in documents:
+                nodes = run_transformations(
+                    [doc],  # single document at a time
+                    self.transformations,
+                    show_progress=False,
+                )
+                all_nodes.extend(nodes)
+            # Log text and bbox for each node before embedding
+            for idx, node in enumerate(all_nodes):
+                bbox = node.metadata.get("bbox")
+                logger.info(f"Embedding node {idx}: text={node.get_content()[:50]!r}..., bbox={bbox}")
             batch_size = getattr(self.embed_model, 'embed_batch_size', 32)
-            n_batches = math.ceil(len(nodes) / batch_size)
-            logger.info(f"Embedding {len(nodes)} nodes in {n_batches} batches (batch_size={batch_size})")
-            for i, node_batch in enumerate(batch_nodes(nodes, batch_size)):
+            n_batches = math.ceil(len(all_nodes) / batch_size)
+            logger.info(f"Embedding {len(all_nodes)} nodes in {n_batches} batches (batch_size={batch_size})")
+            for i, node_batch in enumerate(batch_nodes(all_nodes, batch_size)):
                 logger.info(f"Inserting embedding batch {i+1}/{n_batches} (size {len(node_batch)})")
-                self._index.insert_nodes(node_batch, show_progress=False)
+                self._index.insert_nodes(node_batch, show_progress=True)
             for document in documents:
                 self._index.docstore.set_document_hash(
                     document.get_doc_id(), document.hash
@@ -591,6 +607,8 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
         def save_task(doc_id_arg=doc_id):
             doc_id = doc_id_arg
             try:
+                # Wait for document entry to exist before updating phase
+                wait_for_document_entry(doc_id)
                 update_phase(doc_id, "parsing")
                 documents = parse_documents()
                 # Start extraction and embedding in parallel
@@ -651,36 +669,7 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
                             )
 
                             # Log RAG results before updating
-                            logger.info("\n=== RAG Extraction Results Before Merging ===")
-                            try:
-                                if rag_results:
-                                    for section_name, section_data in rag_results.items():
-                                        logger.info(f"\nSection: {section_name}")
-                                        if not section_data:
-                                            logger.info("  No data found")
-                                            continue
-                                            
-                                        if isinstance(section_data, dict):
-                                            for field_name, field_data in section_data.items():
-                                                logger.info(f"\n  Field: {field_name}")
-                                                if field_data is None:
-                                                    logger.info("    Value: None")
-                                                else:
-                                                    try:
-                                                        # Pretty print the field data
-                                                        formatted_data = json.dumps(field_data, indent=4)
-                                                        # Add indentation to each line for better readability
-                                                        indented_data = "\n".join(f"    {line}" for line in formatted_data.split("\n"))
-                                                        logger.info(f"    Data:\n{indented_data}")
-                                                    except Exception as e:
-                                                        logger.info(f"    Raw Value: {field_data}")
-                                        else:
-                                            logger.info(f"  Raw Data: {section_data}")
-                                else:
-                                    logger.info("No RAG results found")
-                            except Exception as e:
-                                logger.error(f"Error logging RAG results: {str(e)}")
-                                logger.error(f"Raw RAG results: {rag_results}")
+                            logger.info(f"RAG batch results: sections={list(rag_results.keys())}, fields={[k for sec in rag_results.values() if isinstance(sec, dict) for k in sec.keys()]}")
 
                             # Update extraction result with RAG results
                             def deep_update(d: dict, u: dict) -> dict:
@@ -737,11 +726,11 @@ class ParallelizedIngestComponent(BaseIngestComponentWithIndex):
         else:
             # Original parallel bulk ingestion without extraction
             documents = list(
-                itertools.chain.from_iterable(
-                    self._ingest_work_pool.starmap(self.ingest, files)
-                )
+            itertools.chain.from_iterable(
+                self._ingest_work_pool.starmap(self.ingest, files)
             )
-            return documents
+        )
+        return documents
 
     def _save_docs(self, documents: list[Document]) -> list[Document]:
         logger.debug("Transforming count=%s documents into nodes", len(documents))

@@ -5,6 +5,8 @@ import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 import "react-pdf/dist/esm/Page/TextLayer.css";
 import { BENEFIT_FIELDS } from "@/constants/benefitFields";
+import { toast } from "sonner";
+import { useDocumentPhase } from "@/hooks/useDocumentPhase";
 
 // Configure PDF.js worker (recommended way for Next.js App Router)
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -29,6 +31,61 @@ function toLabel(str: string) {
   return str.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Utility to get bounding box from either coordinates or bbox
+function getBoundingBox(field: ExtractionField | null) {
+  if (field?.coordinates && typeof field.coordinates === "object") {
+    const { x, y, width, height } = field.coordinates;
+    if (
+      typeof x === "number" &&
+      typeof y === "number" &&
+      typeof width === "number" &&
+      typeof height === "number"
+    ) {
+      return { x, y, width, height };
+    }
+  }
+  // Handle bbox as array
+  if (field?.bbox && Array.isArray(field.bbox) && field.bbox.length > 0) {
+    const { l, t, r, b } = field.bbox[0] as {
+      l: number;
+      t: number;
+      r: number;
+      b: number;
+    };
+    if (
+      typeof l === "number" &&
+      typeof t === "number" &&
+      typeof r === "number" &&
+      typeof b === "number"
+    ) {
+      return { x: l, y: t, width: r - l, height: b - t };
+    }
+  }
+  // Handle bbox as single object
+  if (
+    field?.bbox &&
+    typeof field.bbox === "object" &&
+    !Array.isArray(field.bbox) &&
+    field.bbox !== null
+  ) {
+    const { l, t, r, b } = field.bbox as {
+      l: number;
+      t: number;
+      r: number;
+      b: number;
+    };
+    if (
+      typeof l === "number" &&
+      typeof t === "number" &&
+      typeof r === "number" &&
+      typeof b === "number"
+    ) {
+      return { x: l, y: t, width: r - l, height: b - t };
+    }
+  }
+  return null;
+}
+
 // Function to transform extraction result to annotations
 function transformExtractionToAnnotations(
   extractionResult: ExtractionResult | null,
@@ -46,28 +103,28 @@ function transformExtractionToAnnotations(
     }
 
     Object.entries(section).forEach(([fieldName, field]) => {
-      if (!field || typeof field.page !== "number" || !field.coordinates) {
+      if (!field || typeof field.page !== "number") {
         return;
       }
-
-      const { x, y, width, height } = field.coordinates;
+      const bbox = getBoundingBox(field);
+      if (!bbox) {
+        return;
+      }
+      const { x, y, width, height } = bbox;
       if (x === null || y === null || width === null || height === null) {
         return;
       }
-
       const pageNumber = field.page + 1;
-      const coordKey = `${pageNumber}-${x}-${y}-${width}-${height}`;
-
-      let existingAnnotation = annotationMap.get(coordKey);
+      const annotationId = `${pageNumber}-${x}-${y}-${width}-${height}`;
+      let existingAnnotation = annotationMap.get(annotationId);
       const newContent = `${toLabel(sectionName)} - ${toLabel(fieldName)}: ${
         field.value
       }\n\nSource: ${field.source_snippet || "N/A"}`;
-
       if (existingAnnotation) {
         existingAnnotation.content += "\n---\n" + newContent;
       } else {
         existingAnnotation = {
-          id: coordKey, // Use coordKey as stable ID instead of random
+          id: annotationId, // Use annotationId as stable ID
           content: newContent,
           position: { x, y },
           type: "bounding_box",
@@ -76,7 +133,7 @@ function transformExtractionToAnnotations(
           width,
           height,
         };
-        annotationMap.set(coordKey, existingAnnotation);
+        annotationMap.set(annotationId, existingAnnotation);
       }
     });
   });
@@ -168,12 +225,42 @@ function ExtractionPanel({
       section
     ] as unknown as Record<string, ExtractionField | null>;
     const prevField = sectionFields?.[fieldName];
+    // Convert coordinates to bbox if present
+    let bbox = undefined;
+    if (prevField?.coordinates && typeof prevField.coordinates === "object") {
+      const { x, y, width, height } = prevField.coordinates;
+      if (
+        typeof x === "number" &&
+        typeof y === "number" &&
+        typeof width === "number" &&
+        typeof height === "number"
+      ) {
+        bbox = { l: x, t: y, r: x + width, b: y + height };
+      }
+    } else if (
+      prevField?.bbox &&
+      typeof prevField.bbox === "object" &&
+      !Array.isArray(prevField.bbox)
+    ) {
+      // If bbox is a single object, use it directly
+      bbox = prevField.bbox;
+    } else if (
+      prevField?.bbox &&
+      Array.isArray(prevField.bbox) &&
+      prevField.bbox.length > 0
+    ) {
+      bbox = prevField.bbox[0];
+    }
     sectionFields[fieldName] = {
       value: editValue,
       page: prevField?.page ?? 0,
-      coordinates: prevField?.coordinates ?? null,
+      bbox: bbox ? bbox : undefined,
       source_snippet: prevField?.source_snippet ?? "",
-    };
+    } as ExtractionField;
+    // Remove coordinates property if present
+    if (sectionFields[fieldName] && "coordinates" in sectionFields[fieldName]) {
+      delete (sectionFields[fieldName] as Partial<ExtractionField>).coordinates;
+    }
     onExtractionUpdate(updatedExtraction);
     try {
       setSaving(true);
@@ -315,20 +402,19 @@ function ExtractionPanel({
                       <div
                         key={fieldName}
                         onClick={function (event) {
-                          if (
-                            fieldObj?.page !== undefined &&
-                            fieldObj?.coordinates
-                          ) {
-                            const pageNumber = (fieldObj.page ?? 0) + 1;
-                            const { x, y, width, height } =
-                              fieldObj.coordinates;
-                            const annotationId = `${pageNumber}-${x}-${y}-${width}-${height}`;
-                            const fieldRect = (
-                              event.currentTarget as HTMLElement
-                            ).getBoundingClientRect();
-                            lastClickedFieldRef.current =
-                              event.currentTarget as HTMLElement;
-                            onFieldClick({ fieldRect, annotationId });
+                          if (fieldObj?.page !== undefined) {
+                            const bbox = getBoundingBox(fieldObj);
+                            if (bbox) {
+                              const { x, y, width, height } = bbox;
+                              const pageNumber = (fieldObj.page ?? 0) + 1;
+                              const annotationId = `${pageNumber}-${x}-${y}-${width}-${height}`;
+                              const fieldRect = (
+                                event.currentTarget as HTMLElement
+                              ).getBoundingClientRect();
+                              lastClickedFieldRef.current =
+                                event.currentTarget as HTMLElement;
+                              onFieldClick({ fieldRect, annotationId });
+                            }
                           }
                         }}
                         onDoubleClick={() =>
@@ -426,6 +512,12 @@ function ConnectorLine({
   if (!activeField) return null;
 
   const annotation = annotations.find((a) => a.id === activeField.annotationId);
+  console.log(
+    "Looking for annotationId:",
+    activeField.annotationId,
+    "in",
+    annotations.map((a) => a.id),
+  );
   if (!annotation) return null;
 
   // Get the page element that contains the annotation
@@ -826,6 +918,51 @@ export default function DocumentReviewPage() {
     page: number;
     rect: { x: number; y: number; width: number; height: number };
   } | null>(null);
+  const [prevExtraction, setPrevExtraction] = useState<ExtractionResult | null>(
+    null,
+  );
+  const phase = useDocumentPhase(params.docId as string | undefined);
+
+  // Move fetchData to component scope so it can be reused
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      console.log("Fetching data for document:", params.docId);
+
+      // Fetch document data including PDF URL and extraction
+      const docResponse = await fetch(`/api/v1/documents/${params.docId}`);
+      if (!docResponse.ok) {
+        throw new Error("Failed to fetch document data");
+      }
+      const docData = await docResponse.json();
+      console.log("Document data received:", docData);
+      setPdfUrl(docData.url);
+
+      // Fetch extraction results
+      const extractionResponse = await fetch(
+        `/api/v1/documents/${params.docId}/extraction`,
+      );
+      if (!extractionResponse.ok) {
+        throw new Error("Failed to fetch extraction data");
+      }
+      const extractionData = await extractionResponse.json();
+      console.log("Extraction data received:", extractionData);
+      setExtractionResult(extractionData);
+    } catch (err) {
+      console.error("Error fetching data:", err);
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (params.docId) {
+      fetchData();
+    }
+  }, [params.docId]);
 
   // Remove scroll event logic and use setInterval for connector line updates
   useEffect(() => {
@@ -886,44 +1023,18 @@ export default function DocumentReviewPage() {
   }, [sidebarRef, activeField]);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        console.log("Fetching data for document:", params.docId);
-
-        // Fetch document data including PDF URL and extraction
-        const docResponse = await fetch(`/api/v1/documents/${params.docId}`);
-        if (!docResponse.ok) {
-          throw new Error("Failed to fetch document data");
-        }
-        const docData = await docResponse.json();
-        console.log("Document data received:", docData);
-        setPdfUrl(docData.url);
-
-        // Fetch extraction results
-        const extractionResponse = await fetch(
-          `/api/v1/documents/${params.docId}/extraction`,
-        );
-        if (!extractionResponse.ok) {
-          throw new Error("Failed to fetch extraction data");
-        }
-        const extractionData = await extractionResponse.json();
-        console.log("Extraction data received:", extractionData);
-        setExtractionResult(extractionData);
-      } catch (err) {
-        console.error("Error fetching data:", err);
-        setError(err instanceof Error ? err.message : "An error occurred");
-      } finally {
-        setLoading(false);
+    if (prevExtraction && extractionResult) {
+      if (
+        JSON.stringify(prevExtraction.result) !==
+        JSON.stringify(extractionResult.result)
+      ) {
+        toast.success("New extraction results have been added!");
+        // Re-fetch extraction data
+        fetchData();
       }
-    };
-
-    if (params.docId) {
-      fetchData();
     }
-  }, [params.docId]);
+    setPrevExtraction(extractionResult);
+  }, [extractionResult]);
 
   const handleDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
@@ -1025,6 +1136,14 @@ export default function DocumentReviewPage() {
       return () => clearTimeout(timeout);
     }
   }, [chatHighlight]);
+
+  // Remove the old polling useEffect for phase
+  // Instead, useEffect to re-fetch extraction result when phase changes to 'completed'
+  useEffect(() => {
+    if (phase === "completed") {
+      fetchData();
+    }
+  }, [phase]);
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>

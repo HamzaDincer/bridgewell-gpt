@@ -246,7 +246,7 @@ export default function Dashboard() {
         );
         // Show toast only once per document when it becomes ready to view
         formattedDocuments.forEach((doc: ApiDocumentWithPhase) => {
-          const readyPhases = ["embedding", "rag", "completed"];
+          const readyPhases = ["rag", "completed"];
           if (
             readyPhases.includes(doc.phase || "") &&
             !shownReadyToast.current.has(doc.id)

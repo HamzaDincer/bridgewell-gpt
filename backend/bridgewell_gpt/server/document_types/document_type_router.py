@@ -149,5 +149,30 @@ def update_document_extraction(doc_id: str, request: Request, extraction: dict =
     extraction_component.save_extraction_result(doc_id, extraction)
     return extraction_component.get_latest_extraction_by_doc_id(doc_id)
 
+@document_type_router.delete(
+    "/documents/{doc_id}",
+    tags=["Document Types"]
+)
+def delete_document_completely(doc_id: str, request: Request):
+    """
+    Completely delete a document and all its associated data.
+    
+    This endpoint will delete:
+    - Document from vector store and node store (embeddings and chunks)
+    - Original file from storage
+    - Extraction results directory 
+    - Document entry from document_types.json
+    
+    Args:
+        doc_id: The document ID to delete
+        request: The HTTP request
+        
+    Returns:
+        Dictionary containing deletion results and any errors
+    """
+    injector: Injector = request.state.injector
+    service = injector.get(DocumentTypeService)
+    return service.delete_document_completely(doc_id)
+
 # We can add POST endpoint later if needed
 # @document_type_router.post("/document-types", ...) ... 

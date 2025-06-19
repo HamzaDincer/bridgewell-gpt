@@ -93,7 +93,8 @@ class IngestionHelper:
         try:
             # Only copy if source and destination are different
             if Path(file_data).resolve() != file_path.resolve():
-                shutil.copy2(file_data, file_path)
+                # Use copyfile instead of copy for GCS FUSE compatibility (avoids all metadata operations)
+                shutil.copyfile(file_data, file_path)
                 logger.info(f"Successfully stored file at: {file_path}")
             else:
                 logger.info(f"Source and destination are the same file, skipping copy: {file_path}")

@@ -22,11 +22,14 @@ import {
   FileText,
   SkipForward,
   CheckCheck,
+  Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 // Import Document and DocumentListViewProps from @/types
 import type { DocumentListViewProps } from "@/types";
+import { deleteDocumentCompletely } from "@/lib/documentProcessing";
+import { useState } from "react";
 
 export function DocumentListView({
   documentTypeName,
@@ -37,6 +40,42 @@ export function DocumentListView({
   onUpload,
 }: DocumentListViewProps) {
   const router = useRouter();
+  const [deletingDocs, setDeletingDocs] = useState<Set<string>>(new Set());
+
+  const handleDelete = async (docId: string, docName: string) => {
+    if (
+      !confirm(
+        `Are you sure you want to delete "${docName}"? This action cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+
+    setDeletingDocs((prev) => new Set(prev).add(docId));
+
+    try {
+      const result = await deleteDocumentCompletely(docId);
+
+      if (result.status === "success") {
+        // Refresh the page to update the document list
+        window.location.reload();
+      } else {
+        alert(
+          `Failed to delete document: ${
+            result.errors?.join(", ") || "Unknown error"
+          }`,
+        );
+      }
+    } catch (error) {
+      alert(`Error deleting document: ${error}`);
+    } finally {
+      setDeletingDocs((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(docId);
+        return newSet;
+      });
+    }
+  };
 
   if (error) {
     return (
@@ -184,6 +223,7 @@ export function DocumentListView({
                   Date added <Filter className="ml-2 h-3 w-3" />
                 </Button>
               </TableHead>
+              <TableHead className="w-[100px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -237,6 +277,24 @@ export function DocumentListView({
                   </TableCell>
                   <TableCell>{doc.dateModified}</TableCell>
                   <TableCell>{doc.dateAdded}</TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent row click
+                        handleDelete(doc.id, doc.name);
+                      }}
+                      disabled={deletingDocs.has(doc.id)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      {deletingDocs.has(doc.id) ? (
+                        "Deleting..."
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TableCell>
                 </TableRow>
               );
             })}

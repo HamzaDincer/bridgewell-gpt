@@ -97,6 +97,15 @@ export interface ExtractionResult {
 
 export type ExtractionData = Record<string, ExtractionField>;
 
+// Document deletion types
+export interface DocumentDeletionResponse {
+  doc_id: string;
+  status: "success" | "partial_success" | "error";
+  deleted_components: string[];
+  errors?: string[];
+  warnings?: string[];
+}
+
 // For FieldSetupView
 export type FieldType = "text" | "number" | "date" | "checkbox" | "select"; // Added select type
 

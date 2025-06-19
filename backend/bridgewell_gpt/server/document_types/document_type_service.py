@@ -182,4 +182,174 @@ class DocumentTypeService:
                     return
         logger.warning(f"Document with id={doc_id} not found for phase update.")
 
+    def delete_document_completely(self, doc_id: str) -> dict:
+        """
+        Completely delete a document and all its associated data.
+        
+        This will delete:
+        - Document from vector store and node store (embeddings and chunks)
+        - Original file from storage
+        - Extraction results directory 
+        - Document entry from document_types.json
+        
+        Args:
+            doc_id: The document ID to delete
+            
+        Returns:
+            Dictionary containing deletion results and any errors
+        """
+        import shutil
+        from pathlib import Path
+        
+        logger.info(f"Starting comprehensive deletion for document: {doc_id}")
+        
+        deletion_results = {
+            "doc_id": doc_id,
+            "deleted_components": [],
+            "errors": [],
+            "warnings": []
+        }
+        
+        # 1. Get document information before deletion
+        doc_info = self._get_document_info(doc_id)
+        if not doc_info:
+            deletion_results["warnings"].append(f"Document {doc_id} not found in document types")
+        
+        # 2. Delete from vector store and node store (using existing ingest service)
+        try:
+            from bridgewell_gpt.di import global_injector
+            from bridgewell_gpt.server.ingest.ingest_service import IngestService
+            ingest_service = global_injector.get(IngestService)
+            ingest_service.delete(doc_id)
+            deletion_results["deleted_components"].append("vector_store_and_nodes")
+            logger.info(f"Successfully deleted {doc_id} from vector store and node store")
+        except Exception as e:
+            error_msg = f"Failed to delete from vector/node stores: {str(e)}"
+            deletion_results["errors"].append(error_msg)
+            logger.error(error_msg)
+        
+        # 3. Delete original file (only if no other documents reference it)
+        if doc_info and doc_info.get("file_name"):
+            try:
+                file_name = doc_info["file_name"]
+                # Check if any other documents reference this file
+                if self._is_file_referenced_by_other_documents(doc_id, file_name):
+                    deletion_results["warnings"].append(f"Original file '{file_name}' is referenced by other documents, skipping deletion")
+                    logger.info(f"Skipping deletion of original file '{file_name}' - referenced by other documents")
+                else:
+                    original_files_dir = local_data_path / "original_files"
+                    file_path = original_files_dir / file_name
+                    if file_path.exists():
+                        file_path.unlink()
+                        logger.debug(f"Deleted original file: {file_path}")
+                        deletion_results["deleted_components"].append("original_file")
+                        logger.info(f"Successfully deleted original file: {file_name}")
+                    else:
+                        deletion_results["warnings"].append(f"Original file '{file_name}' not found on disk")
+            except Exception as e:
+                error_msg = f"Failed to delete original file: {str(e)}"
+                deletion_results["errors"].append(error_msg)
+                logger.error(error_msg)
+        else:
+            deletion_results["warnings"].append("No file name found, skipping original file deletion")
+        
+        # 4. Delete extraction results directory
+        try:
+            extraction_results_dir = local_data_path / "extraction_results" / doc_id
+            if extraction_results_dir.exists():
+                shutil.rmtree(extraction_results_dir)
+                logger.debug(f"Deleted extraction results directory: {extraction_results_dir}")
+            deletion_results["deleted_components"].append("extraction_results")
+            logger.info(f"Successfully deleted extraction results for: {doc_id}")
+        except Exception as e:
+            error_msg = f"Failed to delete extraction results: {str(e)}"
+            deletion_results["errors"].append(error_msg)
+            logger.error(error_msg)
+        
+        # 5. Remove document from document_types.json
+        try:
+            if self._delete_document_from_types(doc_id):
+                deletion_results["deleted_components"].append("document_type_entry")
+                logger.info(f"Successfully removed document entry from document types: {doc_id}")
+            else:
+                deletion_results["warnings"].append("Document entry not found in document types")
+        except Exception as e:
+            error_msg = f"Failed to remove from document types: {str(e)}"
+            deletion_results["errors"].append(error_msg)
+            logger.error(error_msg)
+        
+        # Summary
+        total_components = len(deletion_results["deleted_components"])
+        total_errors = len(deletion_results["errors"])
+        
+        if total_errors == 0:
+            logger.info(f"Successfully completed comprehensive deletion of {doc_id}. Deleted {total_components} components.")
+            deletion_results["status"] = "success"
+        else:
+            logger.warning(f"Partial deletion of {doc_id}. Deleted {total_components} components with {total_errors} errors.")
+            deletion_results["status"] = "partial_success"
+        
+        return deletion_results
+
+    def _get_document_info(self, doc_id: str) -> dict | None:
+        """Get document information from document types."""
+        try:
+            data = self._load_data()
+            for type_data in data:
+                for doc in type_data.get('documents', []):
+                    if doc['id'] == doc_id:
+                        return {
+                            "file_name": doc.get("name"),  # Using 'name' field as file_name
+                            "document_type": type_data.get("title", "Unknown"),
+                            "document_entry": doc
+                        }
+        except Exception as e:
+            logger.warning(f"Error getting document info for {doc_id}: {str(e)}")
+        return None
+
+    def _is_file_referenced_by_other_documents(self, current_doc_id: str, file_name: str) -> bool:
+        """Check if the file is referenced by any documents other than the current one."""
+        try:
+            data = self._load_data()
+            for type_data in data:
+                for doc in type_data.get('documents', []):
+                    # Skip the current document we're deleting
+                    if doc['id'] == current_doc_id:
+                        continue
+                    # Check if another document has the same file name
+                    if doc.get("name") == file_name:
+                        logger.debug(f"File '{file_name}' is referenced by document {doc['id']}")
+                        return True
+            return False
+        except Exception as e:
+            logger.warning(f"Error checking file references for {file_name}: {str(e)}")
+            # If we can't check, err on the side of caution and don't delete
+            return True
+
+    def _delete_document_from_types(self, doc_id: str) -> bool:
+        """Delete a document from document_types.json and update counts."""
+        logger.debug(f"DocumentTypeService: Deleting document {doc_id}")
+        data = self._load_data()
+        
+        for type_data in data:
+            documents = type_data.get('documents', [])
+            original_count = len(documents)
+            
+            # Filter out the document with matching doc_id
+            type_data['documents'] = [doc for doc in documents if doc['id'] != doc_id]
+            
+            # If a document was removed, update counts and save
+            if len(type_data['documents']) < original_count:
+                type_data['uploaded'] = len(type_data['documents'])
+                # Update other counts based on remaining documents
+                type_data['review_pending'] = len([doc for doc in type_data['documents'] if doc.get('phase') == 'review_pending'])
+                type_data['approved'] = len([doc for doc in type_data['documents'] if doc.get('phase') == 'approved'])
+                
+                self._save_data(data)
+                logger.info(f"Successfully deleted document {doc_id} from document type '{type_data['title']}'")
+                return True
+        
+        logger.warning(f"Document {doc_id} not found in any document type")
+        return False
+
  

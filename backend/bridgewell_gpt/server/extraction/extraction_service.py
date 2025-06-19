@@ -489,7 +489,8 @@ class ExtractionService:
             target_path = self._storage_dir / file_name
             
             # Copy the file
-            shutil.copy2(source_path, target_path)
+            # Use copyfile instead of copy for GCS FUSE compatibility (avoids all metadata operations)
+            shutil.copyfile(source_path, target_path)
             logger.debug(f"Stored PDF at: {target_path}")
             
             return target_path

@@ -99,6 +99,24 @@ export async function generateEmbeddings(
   return response.json();
 }
 
+export async function deleteDocumentCompletely(
+  docId: string,
+): Promise<import("../types").DocumentDeletionResponse> {
+  const response = await fetch(`/api/v1/documents/${docId}/delete`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new DocumentProcessingError(
+      "Failed to delete document",
+      response.status,
+      await response.json(),
+    );
+  }
+
+  return response.json();
+}
+
 export async function getProcessingStatus(
   fileId: string,
 ): Promise<ProcessingResponse> {

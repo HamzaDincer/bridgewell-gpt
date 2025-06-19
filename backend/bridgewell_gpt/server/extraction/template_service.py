@@ -131,7 +131,8 @@ class BenefitComparisonTemplate:
             
             # Copy template to output location to preserve formatting
             import shutil
-            shutil.copy2(self.template_path, output_path)
+            # Use copyfile instead of copy for GCS FUSE compatibility (avoids all metadata operations)
+            shutil.copyfile(self.template_path, output_path)
             
             # Load the workbook with all safety options
             wb = load_workbook(

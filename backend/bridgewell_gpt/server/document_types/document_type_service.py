@@ -6,6 +6,7 @@ from typing import List
 from injector import singleton
 from datetime import datetime
 import tempfile
+import pytz
 
 from bridgewell_gpt.paths import local_data_path
 from .document_type_models import DocumentTypeResponse, DocumentTypeCreate, DocumentCreate, DocumentResponse
@@ -129,10 +130,11 @@ class DocumentTypeService:
             logger.warning(f"Document with id={document.doc_id} already exists in type {type_id}, skipping append.")
             return DocumentTypeResponse(**type_data)
         # Create new document entry with initial phase
+        toronto_tz = pytz.timezone('America/Toronto')
         new_doc = {
             "id": document.doc_id,
             "name": document.doc_name,
-            "date_added": datetime.now().isoformat(),
+            "date_added": datetime.now(toronto_tz).isoformat(),
             "phase": "uploading"
         }
         # Add document to type

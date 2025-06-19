@@ -96,7 +96,7 @@ embedding:
   # performance with large files while maintaining all extraction and RAG capabilities.
   ingest_mode: simple
   embed_dim: 1536 # 768 is for nomic-ai/nomic-embed-text-v1.5
-  batch_size: 32 # Batch size for embedding model calls. Tune for your hardware/API.
+  batch_size: 64 # Batch size for embedding model calls. Tune for your hardware/API.
 
 huggingface:
   embedding_hf_model_name: nomic-ai/nomic-embed-text-v1.5

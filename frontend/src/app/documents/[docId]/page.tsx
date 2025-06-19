@@ -512,12 +512,6 @@ function ConnectorLine({
   if (!activeField) return null;
 
   const annotation = annotations.find((a) => a.id === activeField.annotationId);
-  console.log(
-    "Looking for annotationId:",
-    activeField.annotationId,
-    "in",
-    annotations.map((a) => a.id),
-  );
   if (!annotation) return null;
 
   // Get the page element that contains the annotation

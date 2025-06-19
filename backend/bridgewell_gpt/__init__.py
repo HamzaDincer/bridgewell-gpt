@@ -6,6 +6,7 @@ import os
 # Set to 'DEBUG' to have extensive logging turned on, even for libraries
 ROOT_LOG_LEVEL = "INFO"
 
+
 PRETTY_LOG_FORMAT = (
     "%(asctime)s.%(msecs)03d [%(levelname)-8s] %(name)+25s - %(message)s"
 )
@@ -25,3 +26,4 @@ os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
 
 # adding tiktoken cache path within repo to be able to run in offline environment.
 os.environ["TIKTOKEN_CACHE_DIR"] = "tiktoken_cache"
+

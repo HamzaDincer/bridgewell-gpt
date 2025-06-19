@@ -47,7 +47,7 @@ class IngestService:
         self.ingest_component = get_ingestion_component(
             self.storage_context,
             embed_model=embedding_component.embedding_model,
-            transformations=[node_parser, embedding_component.embedding_model],
+            transformations=[node_parser],
             settings=settings(),
             ingest_service=self,
             chat_service=self.chat_service,

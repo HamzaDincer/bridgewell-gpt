@@ -180,6 +180,7 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
             update_phase(doc_id, "extraction")
             extraction = self.extraction_component.extract_document(documents, "Benefit", file_name, doc_id)
             logger.debug(f"Extraction: {extraction}")
+            update_phase(doc_id, "embedding")
             # Store extraction result in document metadata
             if extraction and extraction.get("status") == "completed":
                 logger.info(f"Initial extraction successful with ID: {extraction.get('extraction_id')}")
@@ -191,8 +192,7 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                     doc.metadata["document_type"] = extraction.get("document_type")
                     logger.debug(f"Set extraction_id={doc.metadata['extraction_id']} for doc_id={doc.doc_id}")
 
-        def run_embedding(documents):
-            update_phase(doc_id, "embedding")
+        def run_embedding(documents):         
             # Transform each document individually to avoid shared metadata
             all_nodes = []
             for doc in documents:
@@ -202,7 +202,7 @@ class SimpleIngestComponent(BaseIngestComponentWithIndex):
                     show_progress=False,
                 )
                 all_nodes.extend(nodes)
-            batch_size = getattr(self.embed_model, 'embed_batch_size', 32)
+            batch_size = getattr(self.embed_model, 'batch_size', 32)
             n_batches = math.ceil(len(all_nodes) / batch_size)
             logger.info(f"Embedding {len(all_nodes)} nodes in {n_batches} batches (batch_size={batch_size})")
             for i, node_batch in enumerate(batch_nodes(all_nodes, batch_size)):
